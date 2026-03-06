@@ -1,0 +1,17 @@
+{
+  "name": "Deeds Tracker",
+  "short_name": "Deeds",
+  "description": "Track your Good and Bad Deeds.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
