@@ -4,11 +4,32 @@ var SUPABASE_URL = 'https://cmvjccoakhvdjzfvqtli.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtdmpjY29ha2h2ZGp6ZnZxdGxpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3OTA5MjAsImV4cCI6MjA4ODM2NjkyMH0.J0IQRSUxn3av7bqW54onNq2HDNL8g9cz8Lr633cwpTo';
 // -----------------------------
 
-// Initialize Supabase Client
+// Initialize Supabase Client with default persistence
 var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let currentUser = null;
 let isApproved = false;
+
+// Check for existing session immediately on load
+async function initializeAuth() {
+    try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        if (session) {
+            currentUser = session.user;
+            await checkUserApproval(session.user.email);
+        } else {
+            showLoginScreen();
+        }
+    } catch (error) {
+        console.error("Error getting session on load:", error);
+        showLoginScreen();
+    }
+}
+
+// Call on load
+initializeAuth();
 
 // Listen for Authentication Changes (Login/Logout/Refresh)
 supabase.auth.onAuthStateChange(async (event, session) => {
@@ -127,6 +148,7 @@ function updateUIBasedOnApproval() {
         // Ensure we add a profile logout button to the main screen
         addProfileButton();
         showToast(`Welcome back, ${currentUser.email}!`, "good");
+        updateCounts();
     } else {
         // User logged in but PENDING APPROVAL
         overlay.classList.remove('hidden');
@@ -187,6 +209,7 @@ async function logDeed(portion, type) {
     const btn = portionDiv.querySelector(`.star-${type}`);
     const icon = btn.querySelector('.star-icon');
 
+
     // Play Click Animation
     icon.classList.remove('pulse-click');
     void icon.offsetWidth;
@@ -198,7 +221,7 @@ async function logDeed(portion, type) {
 
     try {
         // Insert row into 'deeds' table in Supabase
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('deeds')
             .insert([
                 {
@@ -206,11 +229,15 @@ async function logDeed(portion, type) {
                     portion: portion.toUpperCase(),
                     deed_type: typeLabel
                 }
-            ]);
+            ])
+            .select();
 
         if (error) throw error;
 
-        showToast(`Successfully logged ${typeLabel}!`, type);
+        const insertedId = data && data.length > 0 ? data[0].id : null;
+
+        showToast(`Successfully logged ${typeLabel}!`, type, insertedId);
+        updateCounts(true);
 
     } catch (error) {
         console.error('Error logging deed:', error);
@@ -221,9 +248,46 @@ async function logDeed(portion, type) {
 }
 
 /**
+ * Deletes a recently logged deed by ID (Undo action)
+ */
+async function undoDeed(id, buttonElement) {
+    if (!currentUser) return;
+
+    // Disable button to prevent double clicks
+    buttonElement.disabled = true;
+    buttonElement.innerText = '...';
+
+    try {
+        const { error } = await supabase
+            .from('deeds')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+
+        showToast("Deed undone successfully.", "info");
+
+        // Hide the original toast quickly
+        const parentToast = buttonElement.closest('.toast');
+        if (parentToast) {
+            parentToast.classList.remove('show');
+            setTimeout(() => parentToast.remove(), 400);
+        }
+
+        updateCounts(true);
+
+    } catch (error) {
+        console.error('Error undoing deed:', error);
+        showToast("Failed to undo.", "error");
+        buttonElement.disabled = false;
+        buttonElement.innerText = 'Undo';
+    }
+}
+
+/**
  * Displays a toast notification on the screen
  */
-function showToast(message, type) {
+function showToast(message, type, deedId = null) {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -234,12 +298,75 @@ function showToast(message, type) {
     else if (type === 'info') icon = '🔄';
     else icon = '❌';
 
-    toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+    let undoHtml = '';
+    if (deedId) {
+        undoHtml = `<button class="undo-btn" onclick="undoDeed('${deedId}', this)">Undo</button>`;
+    }
+
+    toast.innerHTML = `<div class="toast-content"><span>${icon}</span> <span>${message}</span></div> ${undoHtml}`;
     container.appendChild(toast);
 
     setTimeout(() => { toast.classList.add('show'); }, 10);
+
+    // Auto-dismiss after 5 seconds
     setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => { toast.remove(); }, 400);
-    }, 4000);
+        if (toast.parentElement) {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 400);
+        }
+    }, 5000);
+}
+
+/**
+ * Fetches and updates the deed counts for all portions and types
+ */
+async function updateCounts(forceFetch = false) {
+    if (!currentUser || !isApproved) return;
+
+    try {
+        const portions = ['MBH', 'ZBH'];
+        const types = ['Good Deed', 'Bad Deed'];
+
+        // We run these fetch calls concurrently for speed
+        const promises = [];
+
+        for (const portion of portions) {
+            for (const type of types) {
+                const idPrefix = portion.toLowerCase();
+                const idSuffix = type === 'Good Deed' ? 'good' : 'bad';
+                const countId = `count-${idPrefix}-${idSuffix}`;
+                const el = document.getElementById(countId);
+
+                // 1. Immediately visually load from cache to prevent the "-" reset effect
+                const cachedCount = localStorage.getItem(countId);
+                if (cachedCount !== null && el) {
+                    el.innerText = cachedCount;
+                }
+
+                // 2. Only query Supabase if we forced it (like adding a deed) or if count is missing
+                if (forceFetch || cachedCount === null) {
+                    const fetchPromise = supabase
+                        .from('deeds')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('user_email', currentUser.email)
+                        .eq('portion', portion)
+                        .eq('deed_type', type)
+                        .then(({ count, error }) => {
+                            if (!error) {
+                                if (el) el.innerText = count || 0;
+                                localStorage.setItem(countId, count || 0);
+                            }
+                        });
+                    promises.push(fetchPromise);
+                }
+            }
+        }
+
+        await Promise.all(promises);
+
+    } catch (error) {
+        console.error('Error fetching deed counts:', error);
+    }
 }

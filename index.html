@@ -13,7 +13,7 @@
     <meta name="theme-color" content="#0d1117">
     <link rel="apple-touch-icon" href="/icon.svg">
 
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=9">
 </head>
 
 <body>
@@ -23,6 +23,7 @@
             <h2 class="portion-title">MBH</h2>
             <div class="stars-container">
                 <button class="star-btn star-good" onclick="logDeed('mbh', 'good')" aria-label="Log Good Deed for MBH">
+                    <span class="deed-count" id="count-mbh-good">-</span>
                     <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
                         <path
                             d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -30,6 +31,7 @@
                     <span class="star-label">Good Deed</span>
                 </button>
                 <button class="star-btn star-bad" onclick="logDeed('mbh', 'bad')" aria-label="Log Bad Deed for MBH">
+                    <span class="deed-count" id="count-mbh-bad">-</span>
                     <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
                         <path
                             d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -44,6 +46,7 @@
             <h2 class="portion-title">ZBH</h2>
             <div class="stars-container">
                 <button class="star-btn star-good" onclick="logDeed('zbh', 'good')" aria-label="Log Good Deed for ZBH">
+                    <span class="deed-count" id="count-zbh-good">-</span>
                     <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
                         <path
                             d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -51,6 +54,7 @@
                     <span class="star-label">Good Deed</span>
                 </button>
                 <button class="star-btn star-bad" onclick="logDeed('zbh', 'bad')" aria-label="Log Bad Deed for ZBH">
+                    <span class="deed-count" id="count-zbh-bad">-</span>
                     <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
                         <path
                             d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -65,8 +69,9 @@
     <div class="login-overlay" id="login-overlay">
         <div class="login-card">
             <h1 class="login-title">Deeds Tracker</h1>
-            <p class="login-subtitle" id="login-message">Please log in to track your deeds.</p>
-            <button class="auth-btn login-btn" id="google-login-btn" onclick="signInWithGoogle()">
+            <p class="login-subtitle" id="login-message">Verifying session...</p>
+            <button class="auth-btn login-btn" id="google-login-btn" onclick="signInWithGoogle()"
+                style="display: none;">
                 <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
                     <path
                         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -93,20 +98,18 @@
 
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=11"></script>
 
     <!-- PWA Service Worker Registration -->
     <script>
-        // Temporarily disabled to clear cache conflicts
-        /*
+        // Actively unregister any lingering service workers to clear broken cache
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => console.log('ServiceWorker registered:', registration.scope))
-                    .catch(err => console.error('ServiceWorker registration failed:', err));
+            navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                for (let registration of registrations) {
+                    registration.unregister();
+                }
             });
         }
-        */
     </script>
 </body>
 

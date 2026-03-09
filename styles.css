@@ -111,6 +111,27 @@ body {
     filter: drop-shadow(0 0 25px var(--bad-glow));
 }
 
+/* Deed Count Styling */
+.deed-count {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: -2px;
+    color: var(--text-muted);
+    transition: all 0.3s ease;
+}
+
+.star-good:hover .deed-count {
+    color: var(--good-color);
+    text-shadow: 0 0 15px var(--good-glow);
+    transform: scale(1.1);
+}
+
+.star-bad:hover .deed-count {
+    color: var(--bad-color);
+    text-shadow: 0 0 15px var(--bad-glow);
+    transform: scale(1.1);
+}
+
 /* Star Label (Replaces Tooltip) */
 .star-btn {
     flex-direction: column;
@@ -261,4 +282,111 @@ body {
         right: 50%;
         transform: translateX(50%);
     }
+}
+
+/* Authentication Overlay & Modals */
+.login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(13, 17, 23, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    backdrop-filter: blur(10px);
+    transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.login-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 3rem;
+    border-radius: 20px;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.login-title {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    color: var(--text-active);
+}
+
+.login-subtitle {
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+    line-height: 1.5;
+}
+
+.hidden {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* User Profile Button */
+.user-profile {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 0.5rem 1rem;
+    border-radius: 30px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+/* Toast Additions for Undo */
+.toast {
+    justify-content: space-between;
+    min-width: 320px;
+}
+
+.toast-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.undo-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: var(--text-active);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: 1rem;
+}
+
+.undo-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+}
+
+.undo-btn:active {
+    transform: translateY(1px);
+}
+
+.undo-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.user-profile:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
