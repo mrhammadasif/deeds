@@ -250,7 +250,6 @@ async function fetchPreviousMonthWinner () {
         supabase
           .from( 'deeds' )
           .select( '*', { count: 'exact', head: true } )
-          .eq( 'user_email', currentUser.email )
           .eq( 'portion', portion )
           .eq( 'deed_type', type )
           .gte( 'created_at', prevStart.toISOString() )
@@ -576,7 +575,6 @@ async function updateCounts () {
         const fetchPromise = supabase
           .from( 'deeds' )
           .select( '*', { count: 'exact', head: true } )
-          .eq( 'user_email', currentUser.email )
           .eq( 'portion', portion )
           .eq( 'deed_type', type )
           .gte( 'created_at', monthStart )
