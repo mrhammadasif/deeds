@@ -236,7 +236,7 @@ function addProfileButton () {
  * Fetches last month's deed counts and renders the summary banner.
  */
 async function fetchPreviousMonthWinner () {
-  if ( !currentUser || !isApproved ) return
+  if ( !currentUser ) return
 
   const now       = new Date()
   const prevStart = new Date( now.getFullYear(), now.getMonth() - 1, 1 )
@@ -331,7 +331,7 @@ async function fetchPreviousMonthWinner () {
  * Fetches the 10 most recent deeds and renders the activity list.
  */
 async function fetchRecentActivity () {
-  if ( !currentUser || !isApproved ) return
+  if ( !currentUser ) return
 
   const { data, error } = await supabase
     .from( 'deeds' )
@@ -625,7 +625,7 @@ function showToast ( message, type, deedId = null ) {
  * Fetches and updates the deed counts for all portions and types
  */
 async function updateCounts () {
-  if ( !currentUser || !isApproved ) return
+  if ( !currentUser ) return
 
   try {
     const now = new Date()
