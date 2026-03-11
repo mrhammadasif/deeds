@@ -254,6 +254,7 @@ async function fetchPreviousMonthWinner () {
           .eq( 'deed_type', type )
           .gte( 'created_at', prevStart.toISOString() )
           .lt( 'created_at', prevEnd.toISOString() )
+          .is( 'undone_at', null )
           .then( ( { count, error } ) => {
             if ( !error ) counts[key] = count || 0
           } )
@@ -329,7 +330,7 @@ async function fetchRecentActivity () {
 
   const { data, error } = await supabase
     .from( 'deeds' )
-    .select( 'id, portion, deed_type, created_at' )
+    .select( 'id, portion, deed_type, created_at, undone_by, undone_at' )
     .order( 'created_at', { ascending: false } )
     .limit( 10 )
 
@@ -361,22 +362,29 @@ function renderRecentActivity ( deeds ) {
   container.appendChild( mk( 'div', 'ra-header', 'Recent Activity' ) )
 
   for ( const deed of deeds ) {
-    const isGood = deed.deed_type === 'Good Deed'
+    const isGood  = deed.deed_type === 'Good Deed'
+    const undone  = !!deed.undone_at
 
-    const item = mk( 'div', 'ra-item' )
+    const item = mk( 'div', 'ra-item' + ( undone ? ' ra-item-undone' : '' ) )
 
     item.appendChild( mk( 'span', 'ra-icon', isGood ? '⭐' : '⚠️' ) )
 
     const details = mk( 'div', 'ra-details' )
     details.appendChild( mk( 'div', null, deed.deed_type ) )
     details.appendChild( mk( 'div', 'ra-portion', deed.portion ) )
+    if ( undone ) {
+      const undoneBy = deed.undone_by === currentUser.email ? 'you' : deed.undone_by
+      details.appendChild( mk( 'div', 'ra-undone-label', `Undone by ${undoneBy} · ${relativeTime( deed.undone_at )}` ) )
+    }
     item.appendChild( details )
 
     item.appendChild( mk( 'span', 'ra-time', relativeTime( deed.created_at ) ) )
 
-    const btn = mk( 'button', 'ra-undo-btn', 'Undo' )
-    btn.onclick = () => undoDeed( deed.id, btn )
-    item.appendChild( btn )
+    if ( !undone ) {
+      const btn = mk( 'button', 'ra-undo-btn', 'Undo' )
+      btn.onclick = () => undoDeed( deed.id, btn )
+      item.appendChild( btn )
+    }
 
     container.appendChild( item )
   }
@@ -474,12 +482,11 @@ async function logDeed ( portion, type ) {
 }
 
 /**
- * Deletes a recently logged deed by ID (Undo action)
+ * Deletes a deed entirely — used by the toast immediately after logging.
  */
-async function undoDeed ( id, buttonElement ) {
+async function deleteDeed ( id, buttonElement ) {
   if ( !currentUser ) return
 
-  // Disable button to prevent double clicks
   buttonElement.disabled = true
   buttonElement.innerText = '...'
 
@@ -491,9 +498,6 @@ async function undoDeed ( id, buttonElement ) {
 
     if ( error ) throw error
 
-    showToast( "Deed undone successfully.", "info" )
-
-    // Hide the original toast quickly
     const parentToast = buttonElement.closest( '.toast' )
     if ( parentToast ) {
       parentToast.classList.remove( 'show' )
@@ -501,6 +505,35 @@ async function undoDeed ( id, buttonElement ) {
     }
 
     updateCounts()
+
+  } catch ( error ) {
+    console.error( 'Error deleting deed:', error )
+    showToast( "Failed to undo.", "error" )
+    buttonElement.disabled = false
+    buttonElement.innerText = 'Undo'
+  }
+}
+
+/**
+ * Marks a deed as undone — used from the activity list to preserve the audit trail.
+ */
+async function undoDeed ( id, buttonElement ) {
+  if ( !currentUser ) return
+
+  buttonElement.disabled = true
+  buttonElement.innerText = '...'
+
+  try {
+    const { error } = await supabase
+      .from( 'deeds' )
+      .update( { undone_by: currentUser.email, undone_at: new Date().toISOString() } )
+      .eq( 'id', id )
+
+    if ( error ) throw error
+
+    showToast( "Deed undone.", "info" )
+    updateCounts()
+    fetchRecentActivity()
 
   } catch ( error ) {
     console.error( 'Error undoing deed:', error )
@@ -526,7 +559,7 @@ function showToast ( message, type, deedId = null ) {
 
   let undoHtml = ''
   if ( deedId ) {
-    undoHtml = `<button class="undo-btn" onclick="undoDeed('${deedId}', this)">Undo</button>`
+    undoHtml = `<button class="undo-btn" onclick="deleteDeed('${deedId}', this)">Undo</button>`
   }
 
   toast.innerHTML = `<div class="toast-content"><span>${icon}</span> <span>${message}</span></div> ${undoHtml}`
@@ -578,6 +611,7 @@ async function updateCounts () {
           .eq( 'deed_type', type )
           .gte( 'created_at', monthStart )
           .lt( 'created_at', monthEnd )
+          .is( 'undone_at', null )
           .then( ( { count, error } ) => {
             if ( !error ) {
               const val = count || 0

@@ -371,6 +371,21 @@ body {
     cursor: not-allowed;
 }
 
+.ra-item-undone {
+    opacity: 0.5;
+}
+
+.ra-item-undone .ra-icon {
+    filter: grayscale(1);
+}
+
+.ra-undone-label {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+    font-style: italic;
+}
+
 /* Loading shimmer on deed counts */
 .deed-count.loading {
     animation: count-shimmer 1s ease-in-out infinite;
