@@ -18,6 +18,7 @@ let currentUser = null
 let isApproved = false
 let realtimeChannel = null
 let welcomeShown = false
+const deedTimestamps = [] // rolling window for rate limiting
 
 // Check for existing session immediately on load
 async function initializeAuth () {
@@ -380,11 +381,9 @@ function renderRecentActivity ( deeds ) {
 
     item.appendChild( mk( 'span', 'ra-time', relativeTime( deed.created_at ) ) )
 
-    if ( !undone ) {
-      const btn = mk( 'button', 'ra-undo-btn', 'Undo' )
-      btn.onclick = () => undoDeed( deed.id, btn )
-      item.appendChild( btn )
-    }
+    const btn = mk( 'button', undone ? 'ra-redo-btn' : 'ra-undo-btn', undone ? 'Redo' : 'Undo' )
+    btn.onclick = undone ? () => redoDeed( deed.id, btn ) : () => undoDeed( deed.id, btn )
+    item.appendChild( btn )
 
     container.appendChild( item )
   }
@@ -437,6 +436,17 @@ async function logDeed ( portion, type ) {
     showToast( "You must be logged in and approved to log deeds.", "error" )
     return
   }
+
+  const now = Date.now()
+  const oneMinuteAgo = now - 60_000
+  // Drop timestamps outside the rolling window
+  deedTimestamps.splice( 0, deedTimestamps.findIndex( t => t > oneMinuteAgo ) )
+  if ( deedTimestamps.length >= 2 ) {
+    const wait = Math.ceil( ( deedTimestamps[0] + 60_000 - now ) / 1000 )
+    showToast( `Slow down! Try again in ${wait}s.`, "error" )
+    return
+  }
+  deedTimestamps.push( now )
 
   const typeLabel = type === 'good' ? 'Good Deed' : 'Bad Deed'
   const portionDiv = document.getElementById( `portion-${portion}` )
@@ -511,6 +521,35 @@ async function deleteDeed ( id, buttonElement ) {
     showToast( "Failed to undo.", "error" )
     buttonElement.disabled = false
     buttonElement.innerText = 'Undo'
+  }
+}
+
+/**
+ * Restores an undone deed back to active by clearing the undo fields.
+ */
+async function redoDeed ( id, buttonElement ) {
+  if ( !currentUser ) return
+
+  buttonElement.disabled = true
+  buttonElement.innerText = '...'
+
+  try {
+    const { error } = await supabase
+      .from( 'deeds' )
+      .update( { undone_by: null, undone_at: null } )
+      .eq( 'id', id )
+
+    if ( error ) throw error
+
+    showToast( "Deed restored.", "good" )
+    updateCounts()
+    fetchRecentActivity()
+
+  } catch ( error ) {
+    console.error( 'Error redoing deed:', error )
+    showToast( "Failed to restore.", "error" )
+    buttonElement.disabled = false
+    buttonElement.innerText = 'Redo'
   }
 }
 
