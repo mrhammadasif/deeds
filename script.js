@@ -16,6 +16,8 @@ var supabase = window.supabase.createClient( SUPABASE_URL, SUPABASE_PUBLIC_KEY, 
 
 let currentUser = null
 let isApproved = false
+let realtimeChannel = null
+let welcomeShown = false
 
 // Check for existing session immediately on load
 async function initializeAuth () {
@@ -56,6 +58,8 @@ supabase.auth.onAuthStateChange( ( event, session ) => {
   } else if ( event === 'SIGNED_OUT' ) {
     currentUser = null
     isApproved = false
+    welcomeShown = false
+    unsubscribeFromDeeds()
     showLoginScreen()
   }
 } )
@@ -166,8 +170,13 @@ function updateUIBasedOnApproval () {
 
     // Ensure we add a profile logout button to the main screen
     addProfileButton()
-    showToast( `Welcome back, ${currentUser.email}!`, "good" )
+    if ( !welcomeShown ) {
+      showToast( `Welcome back, ${currentUser.email}!`, "good" )
+      welcomeShown = true
+    }
     updateCounts()
+    fetchPreviousMonthWinner()
+    subscribeToDeeds()
   } else {
     // User logged in but PENDING APPROVAL
     overlay.classList.remove( 'hidden' )
@@ -218,6 +227,125 @@ function addProfileButton () {
 
 
 /**
+ * Fetches last month's deed counts and renders the summary banner.
+ */
+async function fetchPreviousMonthWinner () {
+  if ( !currentUser || !isApproved ) return
+
+  const now       = new Date()
+  const prevStart = new Date( now.getFullYear(), now.getMonth() - 1, 1 )
+  const prevEnd   = new Date( now.getFullYear(), now.getMonth(),     1 )
+  const monthName = prevStart.toLocaleString( 'default', { month: 'long', year: 'numeric' } )
+
+  const portions = ['MBH', 'ZBH']
+  const types    = ['Good Deed', 'Bad Deed']
+  const counts   = {}
+
+  const promises = []
+  for ( const portion of portions ) {
+    for ( const type of types ) {
+      const key = `${portion}-${type === 'Good Deed' ? 'good' : 'bad'}`
+      promises.push(
+        supabase
+          .from( 'deeds' )
+          .select( '*', { count: 'exact', head: true } )
+          .eq( 'user_email', currentUser.email )
+          .eq( 'portion', portion )
+          .eq( 'deed_type', type )
+          .gte( 'created_at', prevStart.toISOString() )
+          .lt( 'created_at', prevEnd.toISOString() )
+          .then( ( { count, error } ) => {
+            if ( !error ) counts[key] = count || 0
+          } )
+      )
+    }
+  }
+
+  await Promise.all( promises )
+
+  const mbhGood = counts['MBH-good'] || 0
+  const mbhBad  = counts['MBH-bad']  || 0
+  const zbhGood = counts['ZBH-good'] || 0
+  const zbhBad  = counts['ZBH-bad']  || 0
+  const total   = mbhGood + mbhBad + zbhGood + zbhBad
+
+  const banner = document.getElementById( 'prev-month-banner' )
+  if ( !banner ) return
+
+  if ( total === 0 ) {
+    banner.classList.remove( 'visible' )
+    return
+  }
+
+  const mbhNet  = mbhGood - mbhBad
+  const zbhNet  = zbhGood - zbhBad
+  const fmt     = n => n > 0 ? `+${n}` : `${n}`
+  const mbhWins = mbhNet > zbhNet
+  const zbhWins = zbhNet > mbhNet
+
+  const resultText = mbhWins ? 'MBH wins 👑' : ( zbhWins ? 'ZBH wins 👑' : 'Tied ✦' )
+
+  // Build DOM safely (no innerHTML)
+  const mk = ( tag, cls, text ) => {
+    const e = document.createElement( tag )
+    if ( cls  ) e.className   = cls
+    if ( text !== undefined ) e.textContent = text
+    return e
+  }
+
+  const left = mk( 'div', 'pmb-left' )
+  left.appendChild( mk( 'span', 'pmb-label', 'Last Month' ) )
+  left.appendChild( mk( 'span', 'pmb-month', monthName ) )
+
+  const mbhScore = mk( 'div', 'pmb-score' + ( mbhWins ? ' pmb-winner' : '' ) )
+  mbhScore.appendChild( mk( 'span', 'pmb-name', 'MBH' ) )
+  mbhScore.appendChild( mk( 'span', 'pmb-breakdown', `⭐ ${mbhGood} · ⚠️ ${mbhBad}` ) )
+  mbhScore.appendChild( mk( 'span', 'pmb-net', fmt( mbhNet ) ) )
+
+  const zbhScore = mk( 'div', 'pmb-score' + ( zbhWins ? ' pmb-winner' : '' ) )
+  zbhScore.appendChild( mk( 'span', 'pmb-name', 'ZBH' ) )
+  zbhScore.appendChild( mk( 'span', 'pmb-breakdown', `⭐ ${zbhGood} · ⚠️ ${zbhBad}` ) )
+  zbhScore.appendChild( mk( 'span', 'pmb-net', fmt( zbhNet ) ) )
+
+  const scores = mk( 'div', 'pmb-scores' )
+  scores.appendChild( mbhScore )
+  scores.appendChild( mk( 'span', 'pmb-vs', 'vs' ) )
+  scores.appendChild( zbhScore )
+
+  const result = mk( 'div', 'pmb-result' + ( ( mbhWins || zbhWins ) ? ' pmb-result-gold' : '' ), resultText )
+
+  banner.textContent = ''
+  banner.appendChild( left )
+  banner.appendChild( scores )
+  banner.appendChild( result )
+  banner.classList.add( 'visible' )
+}
+
+/**
+ * Opens a Realtime subscription on the deeds table.
+ * Any INSERT or DELETE on the table triggers a fresh count fetch.
+ */
+function subscribeToDeeds () {
+  if ( realtimeChannel ) return // already subscribed
+
+  realtimeChannel = supabase
+    .channel( 'deeds-changes' )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'deeds' },
+      () => updateCounts()
+    )
+    .subscribe()
+}
+
+function unsubscribeFromDeeds () {
+  if ( realtimeChannel ) {
+    supabase.removeChannel( realtimeChannel )
+    realtimeChannel = null
+  }
+}
+
+/**
  * Logs a deed to the Supabase database
  */
 async function logDeed ( portion, type ) {
@@ -259,7 +387,7 @@ async function logDeed ( portion, type ) {
     const insertedId = data && data.length > 0 ? data[0].id : null
 
     showToast( `Successfully logged ${typeLabel}!`, type, insertedId )
-    updateCounts( true )
+    updateCounts()
 
   } catch ( error ) {
     console.error( 'Error logging deed:', error )
@@ -296,7 +424,7 @@ async function undoDeed ( id, buttonElement ) {
       setTimeout( () => parentToast.remove(), 400 )
     }
 
-    updateCounts( true )
+    updateCounts()
 
   } catch ( error ) {
     console.error( 'Error undoing deed:', error )
@@ -344,14 +472,18 @@ function showToast ( message, type, deedId = null ) {
 /**
  * Fetches and updates the deed counts for all portions and types
  */
-async function updateCounts ( forceFetch = false ) {
+async function updateCounts () {
   if ( !currentUser || !isApproved ) return
 
   try {
+    const now = new Date()
+    const monthStart     = new Date( now.getFullYear(), now.getMonth(),     1 ).toISOString()
+    const monthEnd       = new Date( now.getFullYear(), now.getMonth() + 1, 1 ).toISOString()
+
     const portions = ['MBH', 'ZBH']
     const types = ['Good Deed', 'Bad Deed']
+    const counts = {}
 
-    // We run these fetch calls concurrently for speed
     const promises = []
 
     for ( const portion of portions ) {
@@ -361,49 +493,48 @@ async function updateCounts ( forceFetch = false ) {
         const countId = `count-${idPrefix}-${idSuffix}`
         const el = document.getElementById( countId )
 
-        // 1. Immediately visually load from cache to prevent the "-" reset effect
-        const cachedCount = localStorage.getItem( countId )
-        if ( cachedCount !== null && el ) {
-          el.innerText = cachedCount
-        }
+        if ( el ) el.classList.add( 'loading' )
 
-        // 2. Only query Supabase if we forced it (like adding a deed) or if count is missing
-        if ( forceFetch || cachedCount === null ) {
-          const fetchPromise = supabase
-            .from( 'deeds' )
-            .select( '*', { count: 'exact', head: true } )
-            .eq( 'user_email', currentUser.email )
-            .eq( 'portion', portion )
-            .eq( 'deed_type', type )
-            .then( ( { count, error } ) => {
-              if ( !error ) {
-                if ( el ) el.innerText = count || 0
-                localStorage.setItem( countId, count || 0 )
+        const fetchPromise = supabase
+          .from( 'deeds' )
+          .select( '*', { count: 'exact', head: true } )
+          .eq( 'user_email', currentUser.email )
+          .eq( 'portion', portion )
+          .eq( 'deed_type', type )
+          .gte( 'created_at', monthStart )
+          .lt( 'created_at', monthEnd )
+          .then( ( { count, error } ) => {
+            if ( !error ) {
+              const val = count || 0
+              if ( el ) {
+                el.innerText = val
+                el.classList.remove( 'loading' )
               }
-            } )
-          promises.push( fetchPromise )
-        }
+              counts[countId] = val
+            }
+          } )
+        promises.push( fetchPromise )
       }
     }
 
     await Promise.all( promises )
-    updateProgressBars()
+    updateProgressBars( counts )
 
   } catch ( error ) {
     console.error( 'Error fetching deed counts:', error )
+    document.querySelectorAll( '.deed-count' ).forEach( el => el.classList.remove( 'loading' ) )
   }
 }
 
 /**
- * Reads the four deed counts from localStorage, computes net scores
- * (Good − Bad) for MBH and ZBH, and updates the progress bar DOM elements.
+ * Computes net scores (Good − Bad) for MBH and ZBH, and updates the progress bar DOM elements.
  * Evaluation order avoids division-by-zero (see spec).
  */
-function updateProgressBars () {
-  const mbhGood = parseInt( localStorage.getItem( 'count-mbh-good' ) ) || 0
-  const mbhBad  = parseInt( localStorage.getItem( 'count-mbh-bad' ) )  || 0
-  const zbhGood = parseInt( localStorage.getItem( 'count-zbh-good' ) ) || 0
-  const zbhBad  = parseInt( localStorage.getItem( 'count-zbh-bad' ) )  || 0
+function updateProgressBars ( counts ) {
+  const mbhGood = counts['count-mbh-good'] || 0
+  const mbhBad  = counts['count-mbh-bad']  || 0
+  const zbhGood = counts['count-zbh-good'] || 0
+  const zbhBad  = counts['count-zbh-bad']  || 0
 
   const mbhNet = mbhGood - mbhBad
   const zbhNet = zbhGood - zbhBad

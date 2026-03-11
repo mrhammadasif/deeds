@@ -157,6 +157,7 @@ body {
 .container {
     display: none;
     /* Hidden by default until JS confirms approval */
+    flex-wrap: wrap;
     gap: 3rem;
     width: 90%;
     max-width: 900px;
@@ -165,6 +166,128 @@ body {
 .container.approved {
     display: flex;
     /* Shown when JS adds this class */
+}
+
+/* Previous Month Banner */
+.prev-month-banner {
+    flex-basis: 100%;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 1.25rem 2rem;
+}
+
+.prev-month-banner.visible {
+    display: flex;
+}
+
+.pmb-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex-shrink: 0;
+}
+
+.pmb-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+}
+
+.pmb-month {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-active);
+}
+
+.pmb-scores {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex: 1;
+    justify-content: center;
+}
+
+.pmb-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.pmb-name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+}
+
+.pmb-breakdown {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.pmb-net {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-muted);
+}
+
+.pmb-score.pmb-winner .pmb-name,
+.pmb-score.pmb-winner .pmb-net {
+    color: var(--good-color);
+    text-shadow: 0 0 10px var(--good-glow);
+}
+
+.pmb-vs {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    opacity: 0.4;
+}
+
+.pmb-result {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.pmb-result.pmb-result-gold {
+    color: var(--good-color);
+    text-shadow: 0 0 10px var(--good-glow);
+}
+
+@media (max-width: 768px) {
+    .prev-month-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .pmb-scores {
+        width: 100%;
+    }
+}
+
+/* Loading shimmer on deed counts */
+.deed-count.loading {
+    animation: count-shimmer 1s ease-in-out infinite;
+}
+
+@keyframes count-shimmer {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.25; }
 }
 
 /* Click effect animation class */
