@@ -330,7 +330,6 @@ async function fetchRecentActivity () {
   const { data, error } = await supabase
     .from( 'deeds' )
     .select( 'id, portion, deed_type, created_at' )
-    .eq( 'user_email', currentUser.email )
     .order( 'created_at', { ascending: false } )
     .limit( 10 )
 
