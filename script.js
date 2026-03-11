@@ -427,14 +427,14 @@ function updateProgressBars () {
   const fmt = n => n > 0 ? `+${n}` : `${n}`
 
   // Helper: set a card to its bar state
-  function applyBar ( valueEl, barEl, statusEl, titleEl, titleBase, net, pct, isLeading, statusText ) {
+  function applyBar ( valueEl, barEl, statusEl, titleEl, titleBase, net, pct, isLeading, statusText, showCrown = isLeading ) {
     valueEl.textContent = fmt( net )
     valueEl.className = 'net-score-value' + ( isLeading ? ' leading' : '' )
     barEl.style.width = pct + '%'
     barEl.className = 'progress-fill' + ( isLeading ? ' leading' : '' )
     statusEl.textContent = statusText
     statusEl.className = 'net-score-status' + ( isLeading ? ' leading' : '' )
-    if ( titleEl ) titleEl.textContent = titleBase + ( isLeading ? ' 👑' : '' )
+    if ( titleEl ) titleEl.textContent = titleBase + ( showCrown ? ' 👑' : '' )
   }
 
   // Branch 1: both nets ≤ 0 — no winner
@@ -444,20 +444,11 @@ function updateProgressBars () {
     return
   }
 
-  // Branch 2: tied and both positive — gold bars, no crown
+  // Branch 2: scores are equal; at least one is positive since Branch 1 already handled both ≤ 0
+  // Show gold bars on both cards, no crown
   if ( mbhNet === zbhNet ) {
-    ;[
-      [ mbhValueEl, mbhBarEl, mbhStatusEl, mbhTitle, 'MBH', mbhNet ],
-      [ zbhValueEl, zbhBarEl, zbhStatusEl, zbhTitle, 'ZBH', zbhNet ]
-    ].forEach( ( [ vEl, bEl, sEl, tEl, base, net ] ) => {
-      vEl.textContent = fmt( net )
-      vEl.className = 'net-score-value leading'
-      bEl.style.width = '100%'
-      bEl.className = 'progress-fill leading'
-      sEl.textContent = 'Tied ✦'
-      sEl.className = 'net-score-status leading'
-      if ( tEl ) tEl.textContent = base   // no crown on a tie
-    } )
+    applyBar( mbhValueEl, mbhBarEl, mbhStatusEl, mbhTitle, 'MBH', mbhNet, 100, true, 'Tied ✦', false )
+    applyBar( zbhValueEl, zbhBarEl, zbhStatusEl, zbhTitle, 'ZBH', zbhNet, 100, true, 'Tied ✦', false )
     return
   }
 
