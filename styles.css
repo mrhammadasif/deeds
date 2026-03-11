@@ -1,3 +1,7 @@
+html {
+    overflow-x: hidden;
+}
+
 :root {
     --bg-color: #0d1117;
     --card-bg: rgba(255, 255, 255, 0.05);
@@ -20,7 +24,7 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    overflow: hidden;
+    min-height: 100dvh;
     /* Add a subtle background gradient */
     background: radial-gradient(circle at top right, #1a202c, #0d1117);
 }
@@ -268,16 +272,103 @@ body {
     text-shadow: 0 0 10px var(--good-glow);
 }
 
-@media (max-width: 768px) {
-    .prev-month-banner {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-    }
 
-    .pmb-scores {
-        width: 100%;
-    }
+/* Recent Activity */
+.recent-activity {
+    flex-basis: 100%;
+    display: none;
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.recent-activity.visible {
+    display: block;
+}
+
+.ra-header {
+    padding: 1.1rem 1.5rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ra-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.8rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.15s ease;
+}
+
+.ra-item:last-child {
+    border-bottom: none;
+}
+
+.ra-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.ra-icon {
+    font-size: 1rem;
+    width: 1.5rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.ra-details {
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-active);
+}
+
+.ra-portion {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+}
+
+.ra-time {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.ra-undo-btn {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-muted);
+    padding: 0.3rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    font-family: inherit;
+}
+
+.ra-undo-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-active);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.ra-undo-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 /* Loading shimmer on deed counts */
@@ -386,24 +477,140 @@ body {
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
+    body {
+        align-items: flex-start;
+        padding: 2rem 0 3rem;
+        overflow-y: auto;
+    }
+
     .container {
         flex-direction: column;
-        gap: 2rem;
+        gap: 1.5rem;
+        width: 92%;
     }
 
     .portion {
-        padding: 3rem 2rem;
+        padding: 2.5rem 1.75rem;
+    }
+
+    .portion-title {
+        font-size: 2rem;
+        letter-spacing: 2px;
+        margin-bottom: 2rem;
+    }
+
+    .stars-container {
+        gap: 2.5rem;
     }
 
     .star-icon {
-        width: 64px;
-        height: 64px;
+        width: 68px;
+        height: 68px;
     }
 
-    .auth-container {
-        top: 1rem;
-        right: 50%;
-        transform: translateX(50%);
+    .net-score-bar {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+    }
+
+    .login-card {
+        padding: 2rem 1.5rem;
+    }
+
+    .email-input {
+        font-size: 1rem; /* prevents iOS auto-zoom (triggers below 16px) */
+    }
+
+    .toast-container {
+        left: 1rem;
+        right: 1rem;
+        bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .toast {
+        min-width: unset;
+        width: 100%;
+        transform: translateY(120%);
+    }
+
+    .toast.show {
+        transform: translateY(0);
+    }
+
+    .user-profile {
+        top: 0.75rem;
+        right: 0.75rem;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .prev-month-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+    }
+
+    .pmb-scores {
+        width: 100%;
+    }
+
+    .pmb-label { font-size: 0.7rem; }
+    .pmb-month { font-size: 1rem; }
+    .pmb-name  { font-size: 0.78rem; }
+    .pmb-breakdown { font-size: 0.78rem; }
+    .pmb-net   { font-size: 1.2rem; }
+    .pmb-result { font-size: 0.9rem; }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+    .portion {
+        padding: 2rem 1.25rem;
+        border-radius: 24px;
+    }
+
+    .portion-title {
+        font-size: 1.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .stars-container {
+        gap: 2rem;
+    }
+
+    .star-icon {
+        width: 60px;
+        height: 60px;
+    }
+
+    .deed-count {
+        font-size: 1.2rem;
+    }
+}
+
+/* Touch devices: active states replace hover */
+@media (hover: none) {
+    .star-good:active .star-icon {
+        color: var(--good-color);
+        transform: scale(1.15);
+        filter: drop-shadow(0 0 20px var(--good-glow));
+    }
+
+    .star-bad:active .star-icon {
+        color: var(--bad-color);
+        transform: scale(1.15);
+        filter: drop-shadow(0 0 20px var(--bad-glow));
+    }
+
+    .star-good:active .deed-count,
+    .star-good:active .star-label {
+        color: var(--good-color);
+    }
+
+    .star-bad:active .deed-count,
+    .star-bad:active .star-label {
+        color: var(--bad-color);
     }
 }
 

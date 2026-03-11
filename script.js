@@ -175,6 +175,7 @@ function updateUIBasedOnApproval () {
       welcomeShown = true
     }
     updateCounts()
+    fetchRecentActivity()
     fetchPreviousMonthWinner()
     subscribeToDeeds()
   } else {
@@ -322,6 +323,80 @@ async function fetchPreviousMonthWinner () {
 }
 
 /**
+ * Fetches the 10 most recent deeds and renders the activity list.
+ */
+async function fetchRecentActivity () {
+  if ( !currentUser || !isApproved ) return
+
+  const { data, error } = await supabase
+    .from( 'deeds' )
+    .select( 'id, portion, deed_type, created_at' )
+    .eq( 'user_email', currentUser.email )
+    .order( 'created_at', { ascending: false } )
+    .limit( 10 )
+
+  if ( error ) {
+    console.error( 'Error fetching recent activity:', error )
+    return
+  }
+
+  renderRecentActivity( data || [] )
+}
+
+function renderRecentActivity ( deeds ) {
+  const container = document.getElementById( 'recent-activity' )
+  if ( !container ) return
+
+  if ( deeds.length === 0 ) {
+    container.classList.remove( 'visible' )
+    return
+  }
+
+  const mk = ( tag, cls, text ) => {
+    const e = document.createElement( tag )
+    if ( cls  ) e.className   = cls
+    if ( text !== undefined ) e.textContent = text
+    return e
+  }
+
+  container.textContent = ''
+  container.appendChild( mk( 'div', 'ra-header', 'Recent Activity' ) )
+
+  for ( const deed of deeds ) {
+    const isGood = deed.deed_type === 'Good Deed'
+
+    const item = mk( 'div', 'ra-item' )
+
+    item.appendChild( mk( 'span', 'ra-icon', isGood ? '⭐' : '⚠️' ) )
+
+    const details = mk( 'div', 'ra-details' )
+    details.appendChild( mk( 'div', null, deed.deed_type ) )
+    details.appendChild( mk( 'div', 'ra-portion', deed.portion ) )
+    item.appendChild( details )
+
+    item.appendChild( mk( 'span', 'ra-time', relativeTime( deed.created_at ) ) )
+
+    const btn = mk( 'button', 'ra-undo-btn', 'Undo' )
+    btn.onclick = () => undoDeed( deed.id, btn )
+    item.appendChild( btn )
+
+    container.appendChild( item )
+  }
+
+  container.classList.add( 'visible' )
+}
+
+function relativeTime ( dateStr ) {
+  const diff = Date.now() - new Date( dateStr ).getTime()
+  const mins = Math.floor( diff / 60000 )
+  if ( mins < 1  ) return 'just now'
+  if ( mins < 60 ) return `${mins}m ago`
+  const hrs = Math.floor( mins / 60 )
+  if ( hrs < 24  ) return `${hrs}h ago`
+  return `${Math.floor( hrs / 24 )}d ago`
+}
+
+/**
  * Opens a Realtime subscription on the deeds table.
  * Any INSERT or DELETE on the table triggers a fresh count fetch.
  */
@@ -333,7 +408,10 @@ function subscribeToDeeds () {
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'deeds' },
-      () => updateCounts()
+      () => {
+        updateCounts()
+        fetchRecentActivity()
+      }
     )
     .subscribe()
 }
