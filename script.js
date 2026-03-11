@@ -387,8 +387,103 @@ async function updateCounts ( forceFetch = false ) {
     }
 
     await Promise.all( promises )
+    updateProgressBars()
 
   } catch ( error ) {
     console.error( 'Error fetching deed counts:', error )
   }
+}
+
+/**
+ * Reads the four deed counts from localStorage, computes net scores
+ * (Good − Bad) for MBH and ZBH, and updates the progress bar DOM elements.
+ * Evaluation order avoids division-by-zero (see spec).
+ */
+function updateProgressBars () {
+  const mbhGood = parseInt( localStorage.getItem( 'count-mbh-good' ) ) || 0
+  const mbhBad  = parseInt( localStorage.getItem( 'count-mbh-bad' ) )  || 0
+  const zbhGood = parseInt( localStorage.getItem( 'count-zbh-good' ) ) || 0
+  const zbhBad  = parseInt( localStorage.getItem( 'count-zbh-bad' ) )  || 0
+
+  const mbhNet = mbhGood - mbhBad
+  const zbhNet = zbhGood - zbhBad
+
+  const mbhValueEl  = document.getElementById( 'net-mbh' )
+  const zbhValueEl  = document.getElementById( 'net-zbh' )
+  const mbhBarEl    = document.getElementById( 'bar-mbh' )
+  const zbhBarEl    = document.getElementById( 'bar-zbh' )
+  const mbhStatusEl = document.getElementById( 'status-mbh' )
+  const zbhStatusEl = document.getElementById( 'status-zbh' )
+  const mbhTitle    = document.querySelector( '#portion-mbh .portion-title' )
+  const zbhTitle    = document.querySelector( '#portion-zbh .portion-title' )
+
+  if (
+    !mbhValueEl || !zbhValueEl ||
+    !mbhBarEl   || !zbhBarEl   ||
+    !mbhStatusEl || !zbhStatusEl
+  ) return
+
+  // Format net score for display: +5, 0, -2
+  const fmt = n => n > 0 ? `+${n}` : `${n}`
+
+  // Helper: set a card to its bar state
+  function applyBar ( valueEl, barEl, statusEl, titleEl, titleBase, net, pct, isLeading, statusText ) {
+    valueEl.textContent = fmt( net )
+    valueEl.className = 'net-score-value' + ( isLeading ? ' leading' : '' )
+    barEl.style.width = pct + '%'
+    barEl.className = 'progress-fill' + ( isLeading ? ' leading' : '' )
+    statusEl.textContent = statusText
+    statusEl.className = 'net-score-status' + ( isLeading ? ' leading' : '' )
+    if ( titleEl ) titleEl.textContent = titleBase + ( isLeading ? ' 👑' : '' )
+  }
+
+  // Branch 1: both nets ≤ 0 — no winner
+  if ( mbhNet <= 0 && zbhNet <= 0 ) {
+    applyBar( mbhValueEl, mbhBarEl, mbhStatusEl, mbhTitle, 'MBH', mbhNet, 0, false, '' )
+    applyBar( zbhValueEl, zbhBarEl, zbhStatusEl, zbhTitle, 'ZBH', zbhNet, 0, false, '' )
+    return
+  }
+
+  // Branch 2: tied and both positive — gold bars, no crown
+  if ( mbhNet === zbhNet ) {
+    ;[
+      [ mbhValueEl, mbhBarEl, mbhStatusEl, mbhTitle, 'MBH', mbhNet ],
+      [ zbhValueEl, zbhBarEl, zbhStatusEl, zbhTitle, 'ZBH', zbhNet ]
+    ].forEach( ( [ vEl, bEl, sEl, tEl, base, net ] ) => {
+      vEl.textContent = fmt( net )
+      vEl.className = 'net-score-value leading'
+      bEl.style.width = '100%'
+      bEl.className = 'progress-fill leading'
+      sEl.textContent = 'Tied ✦'
+      sEl.className = 'net-score-status leading'
+      if ( tEl ) tEl.textContent = base   // no crown on a tie
+    } )
+    return
+  }
+
+  // Branch 3: one is ahead
+  const mbhLeading = mbhNet > zbhNet
+  const leaderNet  = mbhLeading ? mbhNet  : zbhNet
+  const trailNet   = mbhLeading ? zbhNet  : mbhNet
+  const trailPct   = Math.max( 0, ( trailNet / leaderNet ) * 100 )
+  const gap        = leaderNet - trailNet
+
+  applyBar(
+    mbhLeading ? mbhValueEl : zbhValueEl,
+    mbhLeading ? mbhBarEl   : zbhBarEl,
+    mbhLeading ? mbhStatusEl : zbhStatusEl,
+    mbhLeading ? mbhTitle   : zbhTitle,
+    mbhLeading ? 'MBH'      : 'ZBH',
+    mbhLeading ? mbhNet     : zbhNet,
+    100, true, `Leading by ${gap} ✦`
+  )
+  applyBar(
+    mbhLeading ? zbhValueEl : mbhValueEl,
+    mbhLeading ? zbhBarEl   : mbhBarEl,
+    mbhLeading ? zbhStatusEl : mbhStatusEl,
+    mbhLeading ? zbhTitle   : mbhTitle,
+    mbhLeading ? 'ZBH'      : 'MBH',
+    mbhLeading ? zbhNet     : mbhNet,
+    trailPct, false, `${gap} behind`
+  )
 }
