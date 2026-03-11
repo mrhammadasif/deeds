@@ -172,6 +172,27 @@ body {
     /* Shown when JS adds this class */
 }
 
+/* View-only banner */
+.view-only-banner {
+    flex-basis: 100%;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 12px;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    color: #93c5fd;
+    text-align: center;
+}
+
+/* Disable all action buttons in view-only mode */
+.container.view-only .star-btn,
+.container.view-only .ra-undo-btn,
+.container.view-only .ra-redo-btn {
+    opacity: 0.3;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
 /* Previous Month Banner */
 .prev-month-banner {
     flex-basis: 100%;

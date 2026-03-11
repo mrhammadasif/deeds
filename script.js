@@ -180,13 +180,15 @@ function updateUIBasedOnApproval () {
     fetchPreviousMonthWinner()
     subscribeToDeeds()
   } else {
-    // User logged in but PENDING APPROVAL
-    overlay.classList.remove( 'hidden' )
-    mainContainer.classList.remove( 'approved' )
-    loginMsg.innerHTML = `You're signed in as <b>${currentUser.email}</b>.<br><br>Your account is not approved yet by the administrator. Please check back later.`
-    if ( googleBtn ) googleBtn.style.display = 'none'
-    if ( emailSection ) emailSection.style.display = 'none'
-    if ( logoutBtn ) logoutBtn.style.display = 'inline-flex'
+    // User logged in but NOT approved -> show app in view-only mode
+    overlay.classList.add( 'hidden' )
+    mainContainer.classList.add( 'approved', 'view-only' )
+    document.getElementById( 'view-only-banner' ).style.display = 'block'
+    addProfileButton()
+    updateCounts()
+    fetchRecentActivity()
+    fetchPreviousMonthWinner()
+    subscribeToDeeds()
   }
 }
 
@@ -197,6 +199,8 @@ function showLoginScreen () {
   const logoutBtn = document.getElementById( 'supa-logout-btn' )
   const emailSection = document.getElementById( 'email-login-section' )
   const mainContainer = document.querySelector( '.container' )
+  document.getElementById( 'view-only-banner' ).style.display = 'none'
+  mainContainer.classList.remove( 'view-only' )
 
   overlay.classList.remove( 'hidden' )
   mainContainer.classList.remove( 'approved' )
@@ -495,7 +499,7 @@ async function logDeed ( portion, type ) {
  * Deletes a deed entirely — used by the toast immediately after logging.
  */
 async function deleteDeed ( id, buttonElement ) {
-  if ( !currentUser ) return
+  if ( !currentUser || !isApproved ) return
 
   buttonElement.disabled = true
   buttonElement.innerText = '...'
@@ -528,7 +532,7 @@ async function deleteDeed ( id, buttonElement ) {
  * Restores an undone deed back to active by clearing the undo fields.
  */
 async function redoDeed ( id, buttonElement ) {
-  if ( !currentUser ) return
+  if ( !currentUser || !isApproved ) return
 
   buttonElement.disabled = true
   buttonElement.innerText = '...'
@@ -557,7 +561,7 @@ async function redoDeed ( id, buttonElement ) {
  * Marks a deed as undone — used from the activity list to preserve the audit trail.
  */
 async function undoDeed ( id, buttonElement ) {
-  if ( !currentUser ) return
+  if ( !currentUser || !isApproved ) return
 
   buttonElement.disabled = true
   buttonElement.innerText = '...'
