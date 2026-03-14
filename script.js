@@ -444,7 +444,8 @@ async function logDeed ( portion, type ) {
   const now = Date.now()
   const oneMinuteAgo = now - 60_000
   // Drop timestamps outside the rolling window
-  deedTimestamps.splice( 0, deedTimestamps.findIndex( t => t > oneMinuteAgo ) )
+  const firstValidIndex = deedTimestamps.findIndex( t => t > oneMinuteAgo )
+  deedTimestamps.splice( 0, firstValidIndex === -1 ? deedTimestamps.length : firstValidIndex )
   if ( deedTimestamps.length >= 2 ) {
     const wait = Math.ceil( ( deedTimestamps[0] + 60_000 - now ) / 1000 )
     showToast( `Slow down! Try again in ${wait}s.`, "error" )
