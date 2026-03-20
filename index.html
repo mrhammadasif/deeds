@@ -26,71 +26,8 @@
         <!-- Previous Month Summary -->
         <div id="prev-month-banner" class="prev-month-banner"></div>
 
-        <!-- Portion MBH -->
-        <div class="portion" id="portion-mbh">
-            <h2 class="portion-title">MBH</h2>
-            <div class="stars-container">
-                <button class="star-btn star-good" onclick="logDeed('mbh', 'good')" aria-label="Log Good Deed for MBH">
-                    <span class="deed-count" id="count-mbh-good">-</span>
-                    <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    <span class="star-label">Good Deed</span>
-                </button>
-                <button class="star-btn star-bad" onclick="logDeed('mbh', 'bad')" aria-label="Log Bad Deed for MBH">
-                    <span class="deed-count" id="count-mbh-bad">-</span>
-                    <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    <span class="star-label">Bad Deed</span>
-                </button>
-            </div>
-            <div class="net-score-bar">
-                <div class="net-score-header">
-                    <span class="net-score-label">Net Score</span>
-                    <span class="net-score-value" id="net-mbh">—</span>
-                </div>
-                <div class="progress-track">
-                    <div class="progress-fill" id="bar-mbh"></div>
-                </div>
-                <div class="net-score-status" id="status-mbh"></div>
-            </div>
-        </div>
-
-        <!-- Portion ZBH -->
-        <div class="portion" id="portion-zbh">
-            <h2 class="portion-title">ZBH</h2>
-            <div class="stars-container">
-                <button class="star-btn star-good" onclick="logDeed('zbh', 'good')" aria-label="Log Good Deed for ZBH">
-                    <span class="deed-count" id="count-zbh-good">-</span>
-                    <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    <span class="star-label">Good Deed</span>
-                </button>
-                <button class="star-btn star-bad" onclick="logDeed('zbh', 'bad')" aria-label="Log Bad Deed for ZBH">
-                    <span class="deed-count" id="count-zbh-bad">-</span>
-                    <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    <span class="star-label">Bad Deed</span>
-                </button>
-            </div>
-            <div class="net-score-bar">
-                <div class="net-score-header">
-                    <span class="net-score-label">Net Score</span>
-                    <span class="net-score-value" id="net-zbh">—</span>
-                </div>
-                <div class="progress-track">
-                    <div class="progress-fill" id="bar-zbh"></div>
-                </div>
-                <div class="net-score-status" id="status-zbh"></div>
-            </div>
-        </div>
+        <!-- Portion cards are rendered dynamically from the KIDS array in script.js -->
+        <div id="portions-container"></div>
         <!-- Recent Activity -->
         <div id="recent-activity" class="recent-activity"></div>
     </div>
