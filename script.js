@@ -20,6 +20,109 @@ let realtimeChannel = null
 let welcomeShown = false
 const deedTimestamps = [] // rolling window for rate limiting
 
+// --- KIDS CONFIGURATION ---
+// Add or remove names here to change which kids are tracked.
+const KIDS = ['MBH', 'ZBH']
+// --------------------------
+
+/**
+ * Builds a portion card for every kid in the KIDS array and injects them
+ * into #portions-container.  Call once on page load before initializeAuth().
+ */
+function renderPortionCards () {
+  const container = document.getElementById( 'portions-container' )
+  if ( !container ) {
+    console.error( 'renderPortionCards: #portions-container not found in DOM' )
+    return
+  }
+
+  const starPath = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'
+
+  container.textContent = ''
+
+  for ( const kid of KIDS ) {
+    const id = kid.toLowerCase()
+
+    const portion = document.createElement( 'div' )
+    portion.className = 'portion'
+    portion.id = `portion-${id}`
+
+    const title = document.createElement( 'h2' )
+    title.className = 'portion-title'
+    title.textContent = kid
+    portion.appendChild( title )
+
+    const starsContainer = document.createElement( 'div' )
+    starsContainer.className = 'stars-container'
+
+    for ( const type of ['good', 'bad'] ) {
+      const btn = document.createElement( 'button' )
+      btn.className = `star-btn star-${type}`
+      btn.setAttribute( 'aria-label', `Log ${type === 'good' ? 'Good' : 'Bad'} Deed for ${kid}` )
+      btn.addEventListener( 'click', () => logDeed( id, type ) )
+
+      const countSpan = document.createElement( 'span' )
+      countSpan.className = 'deed-count'
+      countSpan.id = `count-${id}-${type}`
+      countSpan.textContent = '-'
+      btn.appendChild( countSpan )
+
+      const svg = document.createElementNS( 'http://www.w3.org/2000/svg', 'svg' )
+      svg.setAttribute( 'class', 'star-icon' )
+      svg.setAttribute( 'viewBox', '0 0 24 24' )
+      svg.setAttribute( 'fill', 'currentColor' )
+      const path = document.createElementNS( 'http://www.w3.org/2000/svg', 'path' )
+      path.setAttribute( 'd', starPath )
+      svg.appendChild( path )
+      btn.appendChild( svg )
+
+      const label = document.createElement( 'span' )
+      label.className = 'star-label'
+      label.textContent = type === 'good' ? 'Good Deed' : 'Bad Deed'
+      btn.appendChild( label )
+
+      starsContainer.appendChild( btn )
+    }
+    portion.appendChild( starsContainer )
+
+    const netBar = document.createElement( 'div' )
+    netBar.className = 'net-score-bar'
+
+    const netHeader = document.createElement( 'div' )
+    netHeader.className = 'net-score-header'
+    const netLabel = document.createElement( 'span' )
+    netLabel.className = 'net-score-label'
+    netLabel.textContent = 'Net Score'
+    const netValue = document.createElement( 'span' )
+    netValue.className = 'net-score-value'
+    netValue.id = `net-${id}`
+    netValue.textContent = '—'
+    netHeader.appendChild( netLabel )
+    netHeader.appendChild( netValue )
+    netBar.appendChild( netHeader )
+
+    const progressTrack = document.createElement( 'div' )
+    progressTrack.className = 'progress-track'
+    const progressFill = document.createElement( 'div' )
+    progressFill.className = 'progress-fill'
+    progressFill.id = `bar-${id}`
+    progressTrack.appendChild( progressFill )
+    netBar.appendChild( progressTrack )
+
+    const statusEl = document.createElement( 'div' )
+    statusEl.className = 'net-score-status'
+    statusEl.id = `status-${id}`
+    netBar.appendChild( statusEl )
+
+    portion.appendChild( netBar )
+    container.appendChild( portion )
+  }
+}
+
+// Render portion cards as soon as the script runs.
+// NOTE: script.js is loaded at the bottom of <body>, so the DOM is already parsed here.
+renderPortionCards()
+
 // Check for existing session immediately on load
 async function initializeAuth () {
   try {
@@ -236,14 +339,14 @@ function addProfileButton () {
  * Fetches last month's deed counts and renders the summary banner.
  */
 async function fetchPreviousMonthWinner () {
-  if ( !currentUser ) return
+  if ( !currentUser || KIDS.length === 0 ) return
 
   const now       = new Date()
   const prevStart = new Date( now.getFullYear(), now.getMonth() - 1, 1 )
   const prevEnd   = new Date( now.getFullYear(), now.getMonth(),     1 )
   const monthName = prevStart.toLocaleString( 'default', { month: 'long', year: 'numeric' } )
 
-  const portions = ['MBH', 'ZBH']
+  const portions = KIDS
   const types    = ['Good Deed', 'Bad Deed']
   const counts   = {}
 
@@ -269,11 +372,7 @@ async function fetchPreviousMonthWinner () {
 
   await Promise.all( promises )
 
-  const mbhGood = counts['MBH-good'] || 0
-  const mbhBad  = counts['MBH-bad']  || 0
-  const zbhGood = counts['ZBH-good'] || 0
-  const zbhBad  = counts['ZBH-bad']  || 0
-  const total   = mbhGood + mbhBad + zbhGood + zbhBad
+  const total = KIDS.reduce( ( sum, k ) => sum + ( counts[`${k}-good`] || 0 ) + ( counts[`${k}-bad`] || 0 ), 0 )
 
   const banner = document.getElementById( 'prev-month-banner' )
   if ( !banner ) return
@@ -283,13 +382,20 @@ async function fetchPreviousMonthWinner () {
     return
   }
 
-  const mbhNet  = mbhGood - mbhBad
-  const zbhNet  = zbhGood - zbhBad
-  const fmt     = n => n > 0 ? `+${n}` : `${n}`
-  const mbhWins = mbhNet > zbhNet
-  const zbhWins = zbhNet > mbhNet
+  // Compute net scores for each kid
+  const nets = {}
+  for ( const kid of KIDS ) {
+    nets[kid] = ( counts[`${kid}-good`] || 0 ) - ( counts[`${kid}-bad`] || 0 )
+  }
+  const maxNet     = Math.max( ...Object.values( nets ) )
+  const winnerKids = KIDS.filter( k => nets[k] === maxNet )
+  const isTied     = winnerKids.length > 1
 
-  const resultText = mbhWins ? 'MBH wins 👑' : ( zbhWins ? 'ZBH wins 👑' : 'Tied ✦' )
+  const fmt = n => n > 0 ? `+${n}` : `${n}`
+
+  const resultText = isTied
+    ? 'Tied ✦'
+    : `${winnerKids[0]} wins 👑`
 
   // Build DOM safely (no innerHTML)
   const mk = ( tag, cls, text ) => {
@@ -303,22 +409,27 @@ async function fetchPreviousMonthWinner () {
   left.appendChild( mk( 'span', 'pmb-label', 'Last Month' ) )
   left.appendChild( mk( 'span', 'pmb-month', monthName ) )
 
-  const mbhScore = mk( 'div', 'pmb-score' + ( mbhWins ? ' pmb-winner' : '' ) )
-  mbhScore.appendChild( mk( 'span', 'pmb-name', 'MBH' ) )
-  mbhScore.appendChild( mk( 'span', 'pmb-breakdown', `⭐ ${mbhGood} · ⚠️ ${mbhBad}` ) )
-  mbhScore.appendChild( mk( 'span', 'pmb-net', fmt( mbhNet ) ) )
-
-  const zbhScore = mk( 'div', 'pmb-score' + ( zbhWins ? ' pmb-winner' : '' ) )
-  zbhScore.appendChild( mk( 'span', 'pmb-name', 'ZBH' ) )
-  zbhScore.appendChild( mk( 'span', 'pmb-breakdown', `⭐ ${zbhGood} · ⚠️ ${zbhBad}` ) )
-  zbhScore.appendChild( mk( 'span', 'pmb-net', fmt( zbhNet ) ) )
-
   const scores = mk( 'div', 'pmb-scores' )
-  scores.appendChild( mbhScore )
-  scores.appendChild( mk( 'span', 'pmb-vs', 'vs' ) )
-  scores.appendChild( zbhScore )
 
-  const result = mk( 'div', 'pmb-result' + ( ( mbhWins || zbhWins ) ? ' pmb-result-gold' : '' ), resultText )
+  for ( let i = 0; i < KIDS.length; i++ ) {
+    const kid     = KIDS[i]
+    const good    = counts[`${kid}-good`] || 0
+    const bad     = counts[`${kid}-bad`]  || 0
+    const net     = nets[kid]
+    const isWinner = !isTied && net === maxNet
+
+    const scoreEl = mk( 'div', 'pmb-score' + ( isWinner ? ' pmb-winner' : '' ) )
+    scoreEl.appendChild( mk( 'span', 'pmb-name', kid ) )
+    scoreEl.appendChild( mk( 'span', 'pmb-breakdown', `⭐ ${good} · ⚠️ ${bad}` ) )
+    scoreEl.appendChild( mk( 'span', 'pmb-net', fmt( net ) ) )
+    scores.appendChild( scoreEl )
+
+    if ( i < KIDS.length - 1 ) {
+      scores.appendChild( mk( 'span', 'pmb-vs', 'vs' ) )
+    }
+  }
+
+  const result = mk( 'div', 'pmb-result' + ( !isTied ? ' pmb-result-gold' : '' ), resultText )
 
   banner.textContent = ''
   banner.appendChild( left )
@@ -633,7 +744,7 @@ async function updateCounts () {
     const monthStart     = new Date( now.getFullYear(), now.getMonth(),     1 ).toISOString()
     const monthEnd       = new Date( now.getFullYear(), now.getMonth() + 1, 1 ).toISOString()
 
-    const portions = ['MBH', 'ZBH']
+    const portions = KIDS
     const types = ['Good Deed', 'Bad Deed']
     const counts = {}
 
@@ -680,85 +791,82 @@ async function updateCounts () {
 }
 
 /**
- * Computes net scores (Good − Bad) for MBH and ZBH, and updates the progress bar DOM elements.
- * Evaluation order avoids division-by-zero (see spec).
+ * Computes net scores (Good − Bad) for every kid in KIDS and updates the progress bar DOM elements.
  */
 function updateProgressBars ( counts ) {
-  const mbhGood = counts['count-mbh-good'] || 0
-  const mbhBad  = counts['count-mbh-bad']  || 0
-  const zbhGood = counts['count-zbh-good'] || 0
-  const zbhBad  = counts['count-zbh-bad']  || 0
+  if ( KIDS.length === 0 ) return
 
-  const mbhNet = mbhGood - mbhBad
-  const zbhNet = zbhGood - zbhBad
+  // Compute net score per kid
+  const nets = {}
+  for ( const kid of KIDS ) {
+    const id = kid.toLowerCase()
+    nets[kid] = ( counts[`count-${id}-good`] || 0 ) - ( counts[`count-${id}-bad`] || 0 )
+  }
 
-  const mbhValueEl  = document.getElementById( 'net-mbh' )
-  const zbhValueEl  = document.getElementById( 'net-zbh' )
-  const mbhBarEl    = document.getElementById( 'bar-mbh' )
-  const zbhBarEl    = document.getElementById( 'bar-zbh' )
-  const mbhStatusEl = document.getElementById( 'status-mbh' )
-  const zbhStatusEl = document.getElementById( 'status-zbh' )
-  const mbhTitle    = document.querySelector( '#portion-mbh .portion-title' )
-  const zbhTitle    = document.querySelector( '#portion-zbh .portion-title' )
+  const maxNet     = Math.max( ...Object.values( nets ) )
+  const winnerKids = KIDS.filter( k => nets[k] === maxNet )
+  const isTied     = winnerKids.length > 1
 
-  if (
-    !mbhValueEl || !zbhValueEl ||
-    !mbhBarEl   || !zbhBarEl   ||
-    !mbhStatusEl || !zbhStatusEl
-  ) return
-
-  // Format net score for display: +5, 0, -2
   const fmt = n => n > 0 ? `+${n}` : `${n}`
 
-  // Helper: set a card to its bar state
-  function applyBar ( valueEl, barEl, statusEl, titleEl, titleBase, net, pct, isLeading, statusText, showCrown = isLeading ) {
+  for ( const kid of KIDS ) {
+    const id       = kid.toLowerCase()
+    const net      = nets[kid]
+    const isLeader = net === maxNet
+
+    const valueEl  = document.getElementById( `net-${id}` )
+    const barEl    = document.getElementById( `bar-${id}` )
+    const statusEl = document.getElementById( `status-${id}` )
+    const titleEl  = document.querySelector( `#portion-${id} .portion-title` )
+
+    if ( !valueEl || !barEl || !statusEl ) continue
+
     valueEl.textContent = fmt( net )
-    valueEl.className = 'net-score-value' + ( isLeading ? ' leading' : '' )
-    barEl.style.width = pct + '%'
-    barEl.className = 'progress-fill' + ( isLeading ? ' leading' : '' )
-    statusEl.textContent = statusText
-    statusEl.className = 'net-score-status' + ( isLeading ? ' leading' : '' )
-    if ( titleEl ) titleEl.textContent = titleBase + ( showCrown ? ' 👑' : '' )
+
+    // Branch 1: all nets ≤ 0 — no winner
+    if ( maxNet <= 0 ) {
+      valueEl.className   = 'net-score-value'
+      barEl.style.width   = '0%'
+      barEl.className     = 'progress-fill'
+      statusEl.textContent = ''
+      statusEl.className  = 'net-score-status'
+      if ( titleEl ) titleEl.textContent = kid
+      continue
+    }
+
+    // Branch 2: tied at the top
+    if ( isTied && isLeader ) {
+      valueEl.className   = 'net-score-value leading'
+      barEl.style.width   = '100%'
+      barEl.className     = 'progress-fill leading'
+      statusEl.textContent = 'Tied ✦'
+      statusEl.className  = 'net-score-status leading'
+      if ( titleEl ) titleEl.textContent = kid
+      continue
+    }
+
+    // Branch 3: clear leader
+    if ( isLeader ) {
+      const otherNets = KIDS.filter( k => k !== kid ).map( k => nets[k] )
+      const secondBest = Math.max( ...otherNets )
+      const gap = maxNet - secondBest
+      valueEl.className   = 'net-score-value leading'
+      barEl.style.width   = '100%'
+      barEl.className     = 'progress-fill leading'
+      statusEl.textContent = `Leading by ${gap} ✦`
+      statusEl.className  = 'net-score-status leading'
+      if ( titleEl ) titleEl.textContent = kid + ' 👑'
+      continue
+    }
+
+    // Branch 4: trailing
+    const pct = Math.max( 0, ( net / maxNet ) * 100 )
+    const gap = maxNet - net
+    valueEl.className   = 'net-score-value'
+    barEl.style.width   = pct + '%'
+    barEl.className     = 'progress-fill'
+    statusEl.textContent = `${gap} behind`
+    statusEl.className  = 'net-score-status'
+    if ( titleEl ) titleEl.textContent = kid
   }
-
-  // Branch 1: both nets ≤ 0 — no winner
-  if ( mbhNet <= 0 && zbhNet <= 0 ) {
-    applyBar( mbhValueEl, mbhBarEl, mbhStatusEl, mbhTitle, 'MBH', mbhNet, 0, false, '' )
-    applyBar( zbhValueEl, zbhBarEl, zbhStatusEl, zbhTitle, 'ZBH', zbhNet, 0, false, '' )
-    return
-  }
-
-  // Branch 2: scores are equal; at least one is positive since Branch 1 already handled both ≤ 0
-  // Show gold bars on both cards, no crown
-  if ( mbhNet === zbhNet ) {
-    applyBar( mbhValueEl, mbhBarEl, mbhStatusEl, mbhTitle, 'MBH', mbhNet, 100, true, 'Tied ✦', false )
-    applyBar( zbhValueEl, zbhBarEl, zbhStatusEl, zbhTitle, 'ZBH', zbhNet, 100, true, 'Tied ✦', false )
-    return
-  }
-
-  // Branch 3: one is ahead
-  const mbhLeading = mbhNet > zbhNet
-  const leaderNet  = mbhLeading ? mbhNet  : zbhNet
-  const trailNet   = mbhLeading ? zbhNet  : mbhNet
-  const trailPct   = Math.max( 0, ( trailNet / leaderNet ) * 100 )
-  const gap        = leaderNet - trailNet
-
-  applyBar(
-    mbhLeading ? mbhValueEl : zbhValueEl,
-    mbhLeading ? mbhBarEl   : zbhBarEl,
-    mbhLeading ? mbhStatusEl : zbhStatusEl,
-    mbhLeading ? mbhTitle   : zbhTitle,
-    mbhLeading ? 'MBH'      : 'ZBH',
-    mbhLeading ? mbhNet     : zbhNet,
-    100, true, `Leading by ${gap} ✦`
-  )
-  applyBar(
-    mbhLeading ? zbhValueEl : mbhValueEl,
-    mbhLeading ? zbhBarEl   : mbhBarEl,
-    mbhLeading ? zbhStatusEl : mbhStatusEl,
-    mbhLeading ? zbhTitle   : mbhTitle,
-    mbhLeading ? 'ZBH'      : 'MBH',
-    mbhLeading ? zbhNet     : mbhNet,
-    trailPct, false, `${gap} behind`
-  )
 }
