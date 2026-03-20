@@ -22,7 +22,7 @@ const deedTimestamps = [] // rolling window for rate limiting
 
 // --- KIDS CONFIGURATION ---
 // Add or remove names here to change which kids are tracked.
-const KIDS = ['MBH', 'ZBH']
+const KIDS = ['MBH', 'ZBH', 'BBH']
 // --------------------------
 
 /**
