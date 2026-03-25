@@ -23,6 +23,226 @@ const deedTimestamps = [] // rolling window for rate limiting
 // --- KIDS CONFIGURATION ---
 // Add or remove names here to change which kids are tracked.
 const KIDS = ['MBH', 'ZBH', 'BBH']
+
+const GOOD_DEED_CATEGORIES = [
+  { id: 'house-cleaning', label: 'House Cleaning', stars: 2 },
+  { id: 'homework-help', label: 'Homework Help', stars: 1 },
+  { id: 'kindness-sharing', label: 'Kindness / Sharing', stars: 1 },
+  { id: 'quran-reading', label: 'Quran Reading', stars: 2 },
+  { id: 'salah-on-time', label: 'Salah On Time', stars: 2 },
+  { id: 'other-good', label: 'Other Good Deed', stars: 1 }
+]
+
+const BAD_DEED_CATEGORIES = [
+  { id: 'fighting', label: 'Fighting / Arguing', stars: 1 },
+  { id: 'lying', label: 'Lying', stars: 2 },
+  { id: 'mess-making', label: 'Making a Mess', stars: 1 },
+  { id: 'screen-time-overuse', label: 'Screen Time Overuse', stars: 1 },
+  { id: 'missed-salah', label: 'Missed Salah', stars: 2 },
+  { id: 'other-bad', label: 'Other Bad Deed', stars: 1 }
+]
+
+let actionConfirmDialog = null
+let actionConfirmResolver = null
+
+function getCategoriesForType ( type ) {
+  return type === 'good' ? GOOD_DEED_CATEGORIES : BAD_DEED_CATEGORIES
+}
+
+function closeActionConfirmDialog ( payload ) {
+  if ( actionConfirmDialog ) actionConfirmDialog.backdrop.classList.remove( 'open' )
+  if ( actionConfirmResolver ) actionConfirmResolver( payload )
+  actionConfirmResolver = null
+}
+
+function ensureActionConfirmDialog () {
+  if ( actionConfirmDialog ) return actionConfirmDialog
+
+  const backdrop = document.createElement( 'div' )
+  backdrop.className = 'action-dialog-backdrop'
+
+  const sheet = document.createElement( 'div' )
+  sheet.className = 'action-dialog-sheet'
+
+  const title = document.createElement( 'h3' )
+  title.className = 'action-dialog-title'
+
+  const message = document.createElement( 'p' )
+  message.className = 'action-dialog-message'
+
+  const fieldLabel = document.createElement( 'label' )
+  fieldLabel.className = 'action-dialog-field-label'
+  fieldLabel.textContent = 'Category'
+
+  const categorySelect = document.createElement( 'select' )
+  categorySelect.className = 'action-dialog-select'
+
+  const starsPreview = document.createElement( 'div' )
+  starsPreview.className = 'action-dialog-stars'
+
+  const buttons = document.createElement( 'div' )
+  buttons.className = 'action-dialog-buttons'
+
+  const cancelBtn = document.createElement( 'button' )
+  cancelBtn.className = 'action-dialog-cancel'
+  cancelBtn.textContent = 'Cancel'
+
+  const confirmBtn = document.createElement( 'button' )
+  confirmBtn.className = 'action-dialog-confirm'
+  confirmBtn.textContent = 'Confirm'
+
+  buttons.appendChild( cancelBtn )
+  buttons.appendChild( confirmBtn )
+
+  sheet.appendChild( title )
+  sheet.appendChild( message )
+  sheet.appendChild( fieldLabel )
+  sheet.appendChild( categorySelect )
+  sheet.appendChild( starsPreview )
+  sheet.appendChild( buttons )
+
+  backdrop.appendChild( sheet )
+  document.body.appendChild( backdrop )
+
+  backdrop.addEventListener( 'click', ( event ) => {
+    if ( event.target === backdrop ) closeActionConfirmDialog( { confirmed: false } )
+  } )
+
+  cancelBtn.addEventListener( 'click', () => closeActionConfirmDialog( { confirmed: false } ) )
+
+  document.addEventListener( 'keydown', ( event ) => {
+    if ( event.key === 'Escape' && backdrop.classList.contains( 'open' ) ) {
+      closeActionConfirmDialog( { confirmed: false } )
+    }
+  } )
+
+  actionConfirmDialog = {
+    backdrop, title, message, categorySelect, starsPreview, cancelBtn, confirmBtn
+  }
+
+  return actionConfirmDialog
+}
+
+function askActionConfirmation ( options ) {
+  const dialog = ensureActionConfirmDialog()
+  const useCategory = options.withCategory === true
+  const categories = useCategory ? getCategoriesForType( options.type ) : []
+
+  dialog.title.textContent = options.title
+  dialog.message.textContent = options.message
+  dialog.confirmBtn.textContent = options.confirmText || 'Confirm'
+  dialog.cancelBtn.textContent = options.cancelText || 'Cancel'
+
+  if ( useCategory ) {
+    dialog.categorySelect.style.display = ''
+    dialog.starsPreview.style.display = ''
+    dialog.categorySelect.previousElementSibling.style.display = ''
+
+    dialog.categorySelect.textContent = ''
+    for ( const category of categories ) {
+      const option = document.createElement( 'option' )
+      option.value = category.id
+      option.textContent = `${category.label} (${category.stars}⭐)`
+      dialog.categorySelect.appendChild( option )
+    }
+
+    const updateStarsPreview = () => {
+      const selected = categories.find( category => category.id === dialog.categorySelect.value ) || categories[0]
+      dialog.starsPreview.textContent = `Star Count: ${selected.stars}`
+    }
+
+    dialog.categorySelect.onchange = updateStarsPreview
+    updateStarsPreview()
+  } else {
+    dialog.categorySelect.style.display = 'none'
+    dialog.starsPreview.style.display = 'none'
+    dialog.categorySelect.previousElementSibling.style.display = 'none'
+    dialog.categorySelect.onchange = null
+    dialog.categorySelect.textContent = ''
+    dialog.starsPreview.textContent = ''
+  }
+
+  dialog.backdrop.classList.add( 'open' )
+
+  return new Promise( ( resolve ) => {
+    actionConfirmResolver = resolve
+
+    dialog.confirmBtn.onclick = () => {
+      if ( !useCategory ) {
+        closeActionConfirmDialog( { confirmed: true } )
+        return
+      }
+
+      const selectedCategory = categories.find( category => category.id === dialog.categorySelect.value ) || categories[0]
+      closeActionConfirmDialog( { confirmed: true, category: selectedCategory } )
+    }
+  } )
+}
+
+async function confirmAndLogDeed ( portion, type ) {
+  const typeLabel = type === 'good' ? 'Good Deed' : 'Bad Deed'
+  const result = await askActionConfirmation( {
+    title: `Log ${typeLabel}?`,
+    message: `Choose a category and confirm this ${typeLabel.toLowerCase()}.`,
+    type: type,
+    confirmText: 'Add Deed',
+    withCategory: true
+  } )
+
+  if ( !result.confirmed ) return
+  await logDeed( portion, type, result.category )
+}
+
+async function confirmAndUndoDeed ( deed, buttonElement ) {
+  const typeLabel = deed.deed_type === 'Bad Deed' ? 'Bad Deed' : 'Good Deed'
+  const result = await askActionConfirmation( {
+    title: `Undo ${typeLabel}?`,
+    message: 'Are you sure you want to undo this deed?',
+    confirmText: 'Undo Deed'
+  } )
+
+  if ( !result.confirmed ) return
+  await undoDeed( deed.id, buttonElement, deed )
+}
+
+async function confirmAndRedoDeed ( deed, buttonElement ) {
+  const typeLabel = deed.deed_type === 'Bad Deed' ? 'Bad Deed' : 'Good Deed'
+  const result = await askActionConfirmation( {
+    title: `Redo ${typeLabel}?`,
+    message: 'Are you sure you want to restore this deed?',
+    confirmText: 'Redo Deed'
+  } )
+
+  if ( !result.confirmed ) return
+  await redoDeed( deed.id, buttonElement, deed )
+}
+
+async function confirmAndDeleteDeed ( id, buttonElement ) {
+  if ( !currentUser || !isApproved ) return
+
+  let deed = { id: id, deed_type: 'Good Deed', category: null, star_count: 1 }
+  try {
+    const { data } = await supabase
+      .from( 'deeds' )
+      .select( 'id, deed_type, category, star_count' )
+      .eq( 'id', id )
+      .maybeSingle()
+
+    if ( data ) deed = data
+  } catch ( error ) {
+    console.error( 'Error loading deed details for delete:', error )
+  }
+
+  const typeLabel = deed.deed_type === 'Bad Deed' ? 'Bad Deed' : 'Good Deed'
+  const result = await askActionConfirmation( {
+    title: `Undo ${typeLabel}?`,
+    message: 'Are you sure you want to undo this deed?',
+    confirmText: 'Undo Deed'
+  } )
+
+  if ( !result.confirmed ) return
+  await deleteDeed( id, buttonElement, deed )
+}
 // --------------------------
 
 /**
@@ -59,7 +279,7 @@ function renderPortionCards () {
       const btn = document.createElement( 'button' )
       btn.className = `star-btn star-${type}`
       btn.setAttribute( 'aria-label', `Log ${type === 'good' ? 'Good' : 'Bad'} Deed for ${kid}` )
-      btn.addEventListener( 'click', () => logDeed( id, type ) )
+      btn.addEventListener( 'click', () => confirmAndLogDeed( id, type ) )
 
       const countSpan = document.createElement( 'span' )
       countSpan.className = 'deed-count'
@@ -155,7 +375,7 @@ supabase.auth.onAuthStateChange( ( event, session ) => {
       console.log('[onAuthStateChange] calling checkUserApproval', session.user.email);
       checkUserApproval( session.user.email )
       
-      console.log('[onAuthStateChange] user fetched', data);
+      console.log('[onAuthStateChange] user session available', session.user.email);
     } else {
       showLoginScreen()
     }
@@ -346,31 +566,32 @@ async function fetchPreviousMonthWinner () {
   const prevEnd   = new Date( now.getFullYear(), now.getMonth(),     1 )
   const monthName = prevStart.toLocaleString( 'default', { month: 'long', year: 'numeric' } )
 
-  const portions = KIDS
-  const types    = ['Good Deed', 'Bad Deed']
-  const counts   = {}
+  const { data, error } = await supabase
+    .from( 'deeds' )
+    .select( 'portion, deed_type, star_count' )
+    .gte( 'created_at', prevStart.toISOString() )
+    .lt( 'created_at', prevEnd.toISOString() )
+    .is( 'undone_at', null )
 
-  const promises = []
-  for ( const portion of portions ) {
-    for ( const type of types ) {
-      const key = `${portion}-${type === 'Good Deed' ? 'good' : 'bad'}`
-      promises.push(
-        supabase
-          .from( 'deeds' )
-          .select( '*', { count: 'exact', head: true } )
-          .eq( 'portion', portion )
-          .eq( 'deed_type', type )
-          .gte( 'created_at', prevStart.toISOString() )
-          .lt( 'created_at', prevEnd.toISOString() )
-          .is( 'undone_at', null )
-          .then( ( { count, error } ) => {
-            if ( !error ) counts[key] = count || 0
-          } )
-      )
-    }
+  if ( error ) {
+    console.error( 'Error fetching previous month deed data:', error )
+    return
   }
 
-  await Promise.all( promises )
+  const counts = {}
+  for ( const kid of KIDS ) {
+    counts[`${kid}-good`] = 0
+    counts[`${kid}-bad`] = 0
+  }
+
+  for ( const deed of ( data || [] ) ) {
+    const portion = ( deed.portion || '' ).toUpperCase()
+    if ( !KIDS.includes( portion ) ) continue
+
+    const suffix = deed.deed_type === 'Bad Deed' ? 'bad' : 'good'
+    const stars = Number.isFinite( Number( deed.star_count ) ) ? Number( deed.star_count ) : 1
+    counts[`${portion}-${suffix}`] += stars
+  }
 
   const total = KIDS.reduce( ( sum, k ) => sum + ( counts[`${k}-good`] || 0 ) + ( counts[`${k}-bad`] || 0 ), 0 )
 
@@ -382,7 +603,6 @@ async function fetchPreviousMonthWinner () {
     return
   }
 
-  // Compute net scores for each kid
   const nets = {}
   for ( const kid of KIDS ) {
     nets[kid] = ( counts[`${kid}-good`] || 0 ) - ( counts[`${kid}-bad`] || 0 )
@@ -397,7 +617,6 @@ async function fetchPreviousMonthWinner () {
     ? 'Tied ✦'
     : `${winnerKids[0]} wins 👑`
 
-  // Build DOM safely (no innerHTML)
   const mk = ( tag, cls, text ) => {
     const e = document.createElement( tag )
     if ( cls  ) e.className   = cls
@@ -446,7 +665,7 @@ async function fetchRecentActivity () {
 
   const { data, error } = await supabase
     .from( 'deeds' )
-    .select( 'id, portion, deed_type, created_at, undone_by, undone_at' )
+    .select( 'id, portion, deed_type, category, star_count, created_at, undone_by, undone_at' )
     .order( 'created_at', { ascending: false } )
     .limit( 10 )
 
@@ -497,7 +716,9 @@ function renderRecentActivity ( deeds ) {
     item.appendChild( mk( 'span', 'ra-time', relativeTime( deed.created_at ) ) )
 
     const btn = mk( 'button', undone ? 'ra-redo-btn' : 'ra-undo-btn', undone ? 'Redo' : 'Undo' )
-    btn.onclick = undone ? () => redoDeed( deed.id, btn ) : () => undoDeed( deed.id, btn )
+    btn.onclick = undone
+      ? () => confirmAndRedoDeed( deed, btn )
+      : () => confirmAndUndoDeed( deed, btn )
     item.appendChild( btn )
 
     container.appendChild( item )
@@ -546,7 +767,7 @@ function unsubscribeFromDeeds () {
 /**
  * Logs a deed to the Supabase database
  */
-async function logDeed ( portion, type ) {
+async function logDeed ( portion, type, category = null ) {
   if ( !currentUser || !isApproved ) {
     showToast( "You must be logged in and approved to log deeds.", "error" )
     return
@@ -581,22 +802,42 @@ async function logDeed ( portion, type ) {
 
   try {
     // Insert row into 'deeds' table in Supabase
-    const { data, error } = await supabase
+    const categoryLabel = category ? category.label : 'Uncategorized'
+    const stars = category ? category.stars : 1
+
+    const insertPayload = {
+      user_email: currentUser.email,
+      portion: portion.toUpperCase(),
+      deed_type: typeLabel,
+      category: categoryLabel,
+      star_count: stars
+    }
+
+    let data = null
+    let error = null
+
+    ;( { data, error } = await supabase
       .from( 'deeds' )
-      .insert( [
-        {
+      .insert( [ insertPayload ] )
+      .select() )
+
+    // Backward compatibility: if new columns don't exist yet, fall back gracefully.
+    if ( error && String( error.message || '' ).toLowerCase().includes( 'column' ) ) {
+      ;( { data, error } = await supabase
+        .from( 'deeds' )
+        .insert( [ {
           user_email: currentUser.email,
           portion: portion.toUpperCase(),
           deed_type: typeLabel
-        }
-      ] )
-      .select()
+        } ] )
+        .select() )
+    }
 
     if ( error ) throw error
 
     const insertedId = data && data.length > 0 ? data[0].id : null
 
-    showToast( `Successfully logged ${typeLabel}!`, type, insertedId )
+    showToast( `Logged ${typeLabel}: ${categoryLabel} (+${stars}⭐)`, type, insertedId )
     updateCounts()
 
   } catch ( error ) {
@@ -610,7 +851,7 @@ async function logDeed ( portion, type ) {
 /**
  * Deletes a deed entirely — used by the toast immediately after logging.
  */
-async function deleteDeed ( id, buttonElement ) {
+async function deleteDeed ( id, buttonElement, deedDetails = null ) {
   if ( !currentUser || !isApproved ) return
 
   buttonElement.disabled = true
@@ -630,6 +871,10 @@ async function deleteDeed ( id, buttonElement ) {
       setTimeout( () => parentToast.remove(), 400 )
     }
 
+    const categoryText = deedDetails && deedDetails.category
+      ? ` (${deedDetails.category}, ${deedDetails.star_count || 1}⭐)`
+      : ''
+    showToast( `Deed removed${categoryText}.`, "info" )
     updateCounts()
 
   } catch ( error ) {
@@ -643,7 +888,7 @@ async function deleteDeed ( id, buttonElement ) {
 /**
  * Restores an undone deed back to active by clearing the undo fields.
  */
-async function redoDeed ( id, buttonElement ) {
+async function redoDeed ( id, buttonElement, deedDetails = null ) {
   if ( !currentUser || !isApproved ) return
 
   buttonElement.disabled = true
@@ -657,7 +902,10 @@ async function redoDeed ( id, buttonElement ) {
 
     if ( error ) throw error
 
-    showToast( "Deed restored.", "good" )
+    const categoryText = deedDetails && deedDetails.category
+      ? ` (${deedDetails.category}, ${deedDetails.star_count || 1}⭐)`
+      : ''
+    showToast( `Deed restored${categoryText}.`, "good" )
     updateCounts()
     fetchRecentActivity()
 
@@ -672,7 +920,7 @@ async function redoDeed ( id, buttonElement ) {
 /**
  * Marks a deed as undone — used from the activity list to preserve the audit trail.
  */
-async function undoDeed ( id, buttonElement ) {
+async function undoDeed ( id, buttonElement, deedDetails = null ) {
   if ( !currentUser || !isApproved ) return
 
   buttonElement.disabled = true
@@ -686,7 +934,10 @@ async function undoDeed ( id, buttonElement ) {
 
     if ( error ) throw error
 
-    showToast( "Deed undone.", "info" )
+    const categoryText = deedDetails && deedDetails.category
+      ? ` (${deedDetails.category}, ${deedDetails.star_count || 1}⭐)`
+      : ''
+    showToast( `Deed undone${categoryText}.`, "info" )
     updateCounts()
     fetchRecentActivity()
 
@@ -714,7 +965,7 @@ function showToast ( message, type, deedId = null ) {
 
   let undoHtml = ''
   if ( deedId ) {
-    undoHtml = `<button class="undo-btn" onclick="deleteDeed('${deedId}', this)">Undo</button>`
+    undoHtml = `<button class="undo-btn" onclick="confirmAndDeleteDeed('${deedId}', this)">Undo</button>`
   }
 
   toast.innerHTML = `<div class="toast-content"><span>${icon}</span> <span>${message}</span></div> ${undoHtml}`
@@ -741,47 +992,55 @@ async function updateCounts () {
 
   try {
     const now = new Date()
-    const monthStart     = new Date( now.getFullYear(), now.getMonth(),     1 ).toISOString()
-    const monthEnd       = new Date( now.getFullYear(), now.getMonth() + 1, 1 ).toISOString()
+    const monthStart = new Date( now.getFullYear(), now.getMonth(), 1 ).toISOString()
+    const monthEnd = new Date( now.getFullYear(), now.getMonth() + 1, 1 ).toISOString()
 
-    const portions = KIDS
-    const types = ['Good Deed', 'Bad Deed']
     const counts = {}
+    for ( const kid of KIDS ) {
+      const id = kid.toLowerCase()
+      counts[`count-${id}-good`] = 0
+      counts[`count-${id}-bad`] = 0
+      const goodEl = document.getElementById( `count-${id}-good` )
+      const badEl = document.getElementById( `count-${id}-bad` )
+      if ( goodEl ) goodEl.classList.add( 'loading' )
+      if ( badEl ) badEl.classList.add( 'loading' )
+    }
 
-    const promises = []
+    const { data, error } = await supabase
+      .from( 'deeds' )
+      .select( 'portion, deed_type, star_count' )
+      .gte( 'created_at', monthStart )
+      .lt( 'created_at', monthEnd )
+      .is( 'undone_at', null )
 
-    for ( const portion of portions ) {
-      for ( const type of types ) {
-        const idPrefix = portion.toLowerCase()
-        const idSuffix = type === 'Good Deed' ? 'good' : 'bad'
-        const countId = `count-${idPrefix}-${idSuffix}`
-        const el = document.getElementById( countId )
+    if ( error ) throw error
 
-        if ( el ) el.classList.add( 'loading' )
+    for ( const deed of ( data || [] ) ) {
+      const portion = ( deed.portion || '' ).toUpperCase()
+      if ( !KIDS.includes( portion ) ) continue
 
-        const fetchPromise = supabase
-          .from( 'deeds' )
-          .select( '*', { count: 'exact', head: true } )
-          .eq( 'portion', portion )
-          .eq( 'deed_type', type )
-          .gte( 'created_at', monthStart )
-          .lt( 'created_at', monthEnd )
-          .is( 'undone_at', null )
-          .then( ( { count, error } ) => {
-            if ( !error ) {
-              const val = count || 0
-              if ( el ) {
-                el.innerText = val
-                el.classList.remove( 'loading' )
-              }
-              counts[countId] = val
-            }
-          } )
-        promises.push( fetchPromise )
+      const id = portion.toLowerCase()
+      const suffix = deed.deed_type === 'Bad Deed' ? 'bad' : 'good'
+      const stars = Number.isFinite( Number( deed.star_count ) ) ? Number( deed.star_count ) : 1
+      counts[`count-${id}-${suffix}`] += stars
+    }
+
+    for ( const kid of KIDS ) {
+      const id = kid.toLowerCase()
+      const goodId = `count-${id}-good`
+      const badId = `count-${id}-bad`
+      const goodEl = document.getElementById( goodId )
+      const badEl = document.getElementById( badId )
+      if ( goodEl ) {
+        goodEl.innerText = counts[goodId]
+        goodEl.classList.remove( 'loading' )
+      }
+      if ( badEl ) {
+        badEl.innerText = counts[badId]
+        badEl.classList.remove( 'loading' )
       }
     }
 
-    await Promise.all( promises )
     updateProgressBars( counts )
 
   } catch ( error ) {
@@ -791,12 +1050,11 @@ async function updateCounts () {
 }
 
 /**
- * Computes net scores (Good − Bad) for every kid in KIDS and updates the progress bar DOM elements.
+ * Computes weighted net scores (Good Stars − Bad Stars) for every kid in KIDS.
  */
 function updateProgressBars ( counts ) {
   if ( KIDS.length === 0 ) return
 
-  // Compute net score per kid
   const nets = {}
   for ( const kid of KIDS ) {
     const id = kid.toLowerCase()
@@ -823,7 +1081,6 @@ function updateProgressBars ( counts ) {
 
     valueEl.textContent = fmt( net )
 
-    // Branch 1: all nets ≤ 0 — no winner
     if ( maxNet <= 0 ) {
       valueEl.className   = 'net-score-value'
       barEl.style.width   = '0%'
@@ -834,7 +1091,6 @@ function updateProgressBars ( counts ) {
       continue
     }
 
-    // Branch 2: tied at the top
     if ( isTied && isLeader ) {
       valueEl.className   = 'net-score-value leading'
       barEl.style.width   = '100%'
@@ -845,7 +1101,6 @@ function updateProgressBars ( counts ) {
       continue
     }
 
-    // Branch 3: clear leader
     if ( isLeader ) {
       const otherNets = KIDS.filter( k => k !== kid ).map( k => nets[k] )
       const secondBest = Math.max( ...otherNets )
@@ -859,7 +1114,6 @@ function updateProgressBars ( counts ) {
       continue
     }
 
-    // Branch 4: trailing
     const pct = Math.max( 0, ( net / maxNet ) * 100 )
     const gap = maxNet - net
     valueEl.className   = 'net-score-value'
