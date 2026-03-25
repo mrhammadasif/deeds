@@ -30,15 +30,22 @@ const GOOD_DEED_CATEGORIES = [
   { id: 'kindness-sharing', label: 'Kindness / Sharing', stars: 1 },
   { id: 'quran-reading', label: 'Quran Reading', stars: 2 },
   { id: 'salah-on-time', label: 'Salah On Time', stars: 2 },
+  { id: 'study', label: 'Study', stars: 1 },
+  { id: 'reading', label: 'Book Reading', stars: 1 },
+  { id: 'chores', label: 'Chores', stars: 1 },
+  { id: 'sleeping-on-time', label: 'Sleeping on Time', stars: 1 },
   { id: 'other-good', label: 'Other Good Deed', stars: 1 }
 ]
 
 const BAD_DEED_CATEGORIES = [
   { id: 'fighting', label: 'Fighting / Arguing', stars: 1 },
   { id: 'lying', label: 'Lying', stars: 2 },
+  { id: 'disobedience', label: 'Disobedience', stars: 2 },
   { id: 'mess-making', label: 'Making a Mess', stars: 1 },
-  { id: 'screen-time-overuse', label: 'Screen Time Overuse', stars: 1 },
+  { id: 'screen-time-overuse', label: 'Screen Time Overuse', stars: 2 },
   { id: 'missed-salah', label: 'Missed Salah', stars: 2 },
+  { id: 'missed-study', label: 'Missed Study', stars: 2 },
+  { id: 'stealing', label: 'Stealing', stars: 5 },
   { id: 'other-bad', label: 'Other Bad Deed', stars: 1 }
 ]
 
@@ -74,11 +81,8 @@ function ensureActionConfirmDialog () {
   fieldLabel.className = 'action-dialog-field-label'
   fieldLabel.textContent = 'Category'
 
-  const categorySelect = document.createElement( 'select' )
-  categorySelect.className = 'action-dialog-select'
-
-  const starsPreview = document.createElement( 'div' )
-  starsPreview.className = 'action-dialog-stars'
+  const categoryGrid = document.createElement( 'div' )
+  categoryGrid.className = 'action-dialog-category-grid'
 
   const buttons = document.createElement( 'div' )
   buttons.className = 'action-dialog-buttons'
@@ -97,8 +101,7 @@ function ensureActionConfirmDialog () {
   sheet.appendChild( title )
   sheet.appendChild( message )
   sheet.appendChild( fieldLabel )
-  sheet.appendChild( categorySelect )
-  sheet.appendChild( starsPreview )
+  sheet.appendChild( categoryGrid )
   sheet.appendChild( buttons )
 
   backdrop.appendChild( sheet )
@@ -117,7 +120,7 @@ function ensureActionConfirmDialog () {
   } )
 
   actionConfirmDialog = {
-    backdrop, title, message, categorySelect, starsPreview, cancelBtn, confirmBtn
+    backdrop, title, message, fieldLabel, categoryGrid, cancelBtn, confirmBtn
   }
 
   return actionConfirmDialog
@@ -134,32 +137,43 @@ function askActionConfirmation ( options ) {
   dialog.cancelBtn.textContent = options.cancelText || 'Cancel'
 
   if ( useCategory ) {
-    dialog.categorySelect.style.display = ''
-    dialog.starsPreview.style.display = ''
-    dialog.categorySelect.previousElementSibling.style.display = ''
+    dialog.fieldLabel.style.display = ''
+    dialog.categoryGrid.style.display = ''
+    dialog.categoryGrid.textContent = ''
 
-    dialog.categorySelect.textContent = ''
-    for ( const category of categories ) {
-      const option = document.createElement( 'option' )
-      option.value = category.id
-      option.textContent = `${category.label} (${category.stars}⭐)`
-      dialog.categorySelect.appendChild( option )
+    for ( let i = 0; i < categories.length; i++ ) {
+      const category = categories[i]
+
+      const label = document.createElement( 'label' )
+      label.className = 'action-dialog-category-option'
+
+      const input = document.createElement( 'input' )
+      input.type = 'radio'
+      input.name = 'action-dialog-category'
+      input.value = category.id
+      input.checked = i === 0
+
+      const card = document.createElement( 'div' )
+      card.className = 'action-dialog-category-card'
+
+      const stars = document.createElement( 'div' )
+      stars.className = 'action-dialog-category-stars'
+      stars.textContent = '⭐'.repeat( category.stars || 1 )
+
+      const labelText = document.createElement( 'div' )
+      labelText.className = 'action-dialog-category-title'
+      labelText.textContent = category.label
+
+      card.appendChild( stars )
+      card.appendChild( labelText )
+
+      label.appendChild( input )
+      label.appendChild( card )
+      dialog.categoryGrid.appendChild( label )
     }
-
-    const updateStarsPreview = () => {
-      const selected = categories.find( category => category.id === dialog.categorySelect.value ) || categories[0]
-      dialog.starsPreview.textContent = `Star Count: ${selected.stars}`
-    }
-
-    dialog.categorySelect.onchange = updateStarsPreview
-    updateStarsPreview()
   } else {
-    dialog.categorySelect.style.display = 'none'
-    dialog.starsPreview.style.display = 'none'
-    dialog.categorySelect.previousElementSibling.style.display = 'none'
-    dialog.categorySelect.onchange = null
-    dialog.categorySelect.textContent = ''
-    dialog.starsPreview.textContent = ''
+    dialog.fieldLabel.style.display = 'none'
+    dialog.categoryGrid.style.display = 'none'
   }
 
   dialog.backdrop.classList.add( 'open' )
@@ -173,7 +187,8 @@ function askActionConfirmation ( options ) {
         return
       }
 
-      const selectedCategory = categories.find( category => category.id === dialog.categorySelect.value ) || categories[0]
+      const selectedId = dialog.categoryGrid.querySelector( 'input[type="radio"]:checked' )?.value
+      const selectedCategory = categories.find( category => category.id === selectedId ) || categories[0]
       closeActionConfirmDialog( { confirmed: true, category: selectedCategory } )
     }
   } )

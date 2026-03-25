@@ -978,6 +978,62 @@ body {
     color: #fde68a;
 }
 
+.action-dialog-category-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-top: 0.2rem;
+}
+
+.action-dialog-category-option {
+    position: relative;
+    display: block;
+    cursor: pointer;
+    user-select: none;
+}
+
+.action-dialog-category-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.action-dialog-category-card {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 0.75rem 0.5rem 0.65rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.action-dialog-category-option input:checked + .action-dialog-category-card {
+    border-color: rgba(59, 130, 246, 0.7);
+    background: rgba(59, 130, 246, 0.18);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.25);
+}
+
+.action-dialog-category-stars {
+    font-size: 1.2rem;
+    line-height: 1;
+    color: #fde68a;
+    text-shadow: 0 0 14px rgba(253, 230, 138, 0.35);
+}
+
+.action-dialog-category-title {
+    font-size: 0.84rem;
+    font-weight: 800;
+    color: var(--text-active);
+    text-align: center;
+    line-height: 1.15;
+    padding: 0 0.1rem;
+}
+
 .action-dialog-buttons {
     display: grid;
     grid-template-columns: 1fr 1fr;
