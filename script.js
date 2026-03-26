@@ -20,34 +20,14 @@ let realtimeChannel = null
 let welcomeShown = false
 const deedTimestamps = [] // rolling window for rate limiting
 
-// --- KIDS CONFIGURATION ---
-// Add or remove names here to change which kids are tracked.
-const KIDS = ['MBH', 'ZBH', 'BBH']
+// Kids are loaded dynamically from the `kids` Supabase table.
+let KIDS = []
+let KIDS_ID_MAP = {}         // { 'MBH': 'uuid-...', ... }
+let KIDS_ID_MAP_REVERSE = {} // { 'uuid-...': 'MBH', ... }
 
-const GOOD_DEED_CATEGORIES = [
-  { id: 'house-cleaning', label: 'House Cleaning', stars: 2 },
-  { id: 'homework-help', label: 'Homework Help', stars: 1 },
-  { id: 'kindness-sharing', label: 'Kindness / Sharing', stars: 1 },
-  { id: 'quran-reading', label: 'Quran Reading', stars: 2 },
-  { id: 'salah-on-time', label: 'Salah On Time', stars: 2 },
-  { id: 'study', label: 'Study', stars: 1 },
-  { id: 'reading', label: 'Book Reading', stars: 1 },
-  { id: 'chores', label: 'Chores', stars: 1 },
-  { id: 'sleeping-on-time', label: 'Sleeping on Time', stars: 1 },
-  { id: 'other-good', label: 'Other Good Deed', stars: 1 }
-]
-
-const BAD_DEED_CATEGORIES = [
-  { id: 'fighting', label: 'Fighting / Arguing', stars: 1 },
-  { id: 'lying', label: 'Lying', stars: 2 },
-  { id: 'disobedience', label: 'Disobedience', stars: 2 },
-  { id: 'mess-making', label: 'Making a Mess', stars: 1 },
-  { id: 'screen-time-overuse', label: 'Screen Time Overuse', stars: 2 },
-  { id: 'missed-salah', label: 'Missed Salah', stars: 2 },
-  { id: 'missed-study', label: 'Missed Study', stars: 2 },
-  { id: 'stealing', label: 'Stealing', stars: 5 },
-  { id: 'other-bad', label: 'Other Bad Deed', stars: 1 }
-]
+let GOOD_DEED_CATEGORIES = []
+let BAD_DEED_CATEGORIES = []
+let CATEGORIES_MAP = {} // { 'uuid': { id, type, label, stars }, ... }
 
 let actionConfirmDialog = null
 let actionConfirmResolver = null
@@ -194,7 +174,7 @@ function askActionConfirmation ( options ) {
   } )
 }
 
-async function confirmAndLogDeed ( portion, type ) {
+async function confirmAndLogDeed ( kidId, type ) {
   const typeLabel = type === 'good' ? 'Good Deed' : 'Bad Deed'
   const result = await askActionConfirmation( {
     title: `Log ${typeLabel}?`,
@@ -205,11 +185,11 @@ async function confirmAndLogDeed ( portion, type ) {
   } )
 
   if ( !result.confirmed ) return
-  await logDeed( portion, type, result.category )
+  await logDeed( kidId, type, result.category )
 }
 
 async function confirmAndUndoDeed ( deed, buttonElement ) {
-  const typeLabel = deed.deed_type === 'Bad Deed' ? 'Bad Deed' : 'Good Deed'
+  const typeLabel = deed.deed_type === 'bad' ? 'Bad Deed' : 'Good Deed'
   const result = await askActionConfirmation( {
     title: `Undo ${typeLabel}?`,
     message: 'Are you sure you want to undo this deed?',
@@ -221,7 +201,7 @@ async function confirmAndUndoDeed ( deed, buttonElement ) {
 }
 
 async function confirmAndRedoDeed ( deed, buttonElement ) {
-  const typeLabel = deed.deed_type === 'Bad Deed' ? 'Bad Deed' : 'Good Deed'
+  const typeLabel = deed.deed_type === 'bad' ? 'Bad Deed' : 'Good Deed'
   const result = await askActionConfirmation( {
     title: `Redo ${typeLabel}?`,
     message: 'Are you sure you want to restore this deed?',
@@ -235,11 +215,11 @@ async function confirmAndRedoDeed ( deed, buttonElement ) {
 async function confirmAndDeleteDeed ( id, buttonElement ) {
   if ( !currentUser || !isApproved ) return
 
-  let deed = { id: id, deed_type: 'Good Deed', category: null, star_count: 1 }
+  let deed = { id: id, deed_type: 'good', category_id: null, star_count: 1 }
   try {
     const { data } = await supabase
       .from( 'deeds' )
-      .select( 'id, deed_type, category, star_count' )
+      .select( 'id, deed_type, category_id, star_count' )
       .eq( 'id', id )
       .maybeSingle()
 
@@ -248,7 +228,7 @@ async function confirmAndDeleteDeed ( id, buttonElement ) {
     console.error( 'Error loading deed details for delete:', error )
   }
 
-  const typeLabel = deed.deed_type === 'Bad Deed' ? 'Bad Deed' : 'Good Deed'
+  const typeLabel = deed.deed_type === 'bad' ? 'Bad Deed' : 'Good Deed'
   const result = await askActionConfirmation( {
     title: `Undo ${typeLabel}?`,
     message: 'Are you sure you want to undo this deed?',
@@ -294,7 +274,7 @@ function renderPortionCards () {
       const btn = document.createElement( 'button' )
       btn.className = `star-btn star-${type}`
       btn.setAttribute( 'aria-label', `Log ${type === 'good' ? 'Good' : 'Bad'} Deed for ${kid}` )
-      btn.addEventListener( 'click', () => confirmAndLogDeed( id, type ) )
+      btn.addEventListener( 'click', () => confirmAndLogDeed( KIDS_ID_MAP[ kid ], type ) )
 
       const countSpan = document.createElement( 'span' )
       countSpan.className = 'deed-count'
@@ -354,9 +334,51 @@ function renderPortionCards () {
   }
 }
 
-// Render portion cards as soon as the script runs.
+/**
+ * Fetches the list of kids from Supabase and populates the KIDS array.
+ */
+async function loadKids () {
+  try {
+    const { data, error } = await supabase
+      .from( 'kids' )
+      .select( 'id, name' )
+      .order( 'display_order', { ascending: true } )
+    if ( error ) throw error
+    KIDS = ( data || [] ).map( k => k.name )
+    KIDS_ID_MAP = Object.fromEntries( ( data || [] ).map( k => [k.name, k.id] ) )
+    KIDS_ID_MAP_REVERSE = Object.fromEntries( ( data || [] ).map( k => [k.id, k.name] ) )
+  } catch ( err ) {
+    console.error( 'Error loading kids, falling back to defaults:', err )
+    KIDS = ['MBH', 'ZBH', 'BBH']
+    KIDS_ID_MAP = {}
+  }
+}
+
+/**
+ * Fetches the list of categories from Supabase and populates the category arrays/map.
+ */
+async function loadCategories () {
+  try {
+    const { data, error } = await supabase
+      .from( 'categories' )
+      .select( 'id, type, label, stars' )
+      .order( 'display_order', { ascending: true } )
+    if ( error ) throw error
+    GOOD_DEED_CATEGORIES = ( data || [] ).filter( c => c.type === 'good' )
+    BAD_DEED_CATEGORIES  = ( data || [] ).filter( c => c.type === 'bad' )
+    CATEGORIES_MAP = Object.fromEntries( ( data || [] ).map( c => [c.id, c] ) )
+  } catch ( err ) {
+    console.error( 'Error loading categories:', err )
+  }
+}
+
 // NOTE: script.js is loaded at the bottom of <body>, so the DOM is already parsed here.
-renderPortionCards()
+async function init () {
+  await Promise.all( [ loadKids(), loadCategories() ] )
+  renderPortionCards()
+  initializeAuth()
+}
+init()
 
 // Check for existing session immediately on load
 async function initializeAuth () {
@@ -378,9 +400,6 @@ async function initializeAuth () {
     showLoginScreen()
   }
 }
-
-// Call on load
-initializeAuth()
 
 // Listen for Authentication Changes (Login/Logout/Refresh)
 supabase.auth.onAuthStateChange( ( event, session ) => {
@@ -583,7 +602,7 @@ async function fetchPreviousMonthWinner () {
 
   const { data, error } = await supabase
     .from( 'deeds' )
-    .select( 'portion, deed_type, star_count' )
+    .select( 'kid_id, deed_type, star_count' )
     .gte( 'created_at', prevStart.toISOString() )
     .lt( 'created_at', prevEnd.toISOString() )
     .is( 'undone_at', null )
@@ -600,10 +619,10 @@ async function fetchPreviousMonthWinner () {
   }
 
   for ( const deed of ( data || [] ) ) {
-    const portion = ( deed.portion || '' ).toUpperCase()
+    const portion = KIDS_ID_MAP_REVERSE[ deed.kid_id ] || ''
     if ( !KIDS.includes( portion ) ) continue
 
-    const suffix = deed.deed_type === 'Bad Deed' ? 'bad' : 'good'
+    const suffix = deed.deed_type === 'bad' ? 'bad' : 'good'
     const stars = Number.isFinite( Number( deed.star_count ) ) ? Number( deed.star_count ) : 1
     counts[`${portion}-${suffix}`] += stars
   }
@@ -680,7 +699,7 @@ async function fetchRecentActivity () {
 
   const { data, error } = await supabase
     .from( 'deeds' )
-    .select( 'id, portion, deed_type, category, star_count, created_at, undone_by, undone_at' )
+    .select( 'id, kid_id, deed_type, category_id, star_count, created_at, undone_by, undone_at' )
     .order( 'created_at', { ascending: false } )
     .limit( 10 )
 
@@ -712,16 +731,14 @@ function renderRecentActivity ( deeds ) {
   container.appendChild( mk( 'div', 'ra-header', 'Recent Activity' ) )
 
   for ( const deed of deeds ) {
-    const isGood  = deed.deed_type === 'Good Deed'
+    const isGood  = deed.deed_type === 'good'
     const undone  = !!deed.undone_at
 
     const item = mk( 'div', 'ra-item' + ( undone ? ' ra-item-undone' : '' ) )
 
-    item.appendChild( mk( 'span', 'ra-icon', isGood ? '⭐' : '⚠️' ) )
-
     const details = mk( 'div', 'ra-details' )
-    details.appendChild( mk( 'div', null, deed.deed_type ) )
-    details.appendChild( mk( 'div', 'ra-portion', deed.portion ) )
+    details.appendChild( mk( 'div', null, KIDS_ID_MAP_REVERSE[ deed.kid_id ] || deed.kid_id ) )
+    details.appendChild( mk( 'div', 'ra-portion', `${CATEGORIES_MAP[deed.category_id]?.label ?? 'Unknown'}  ${(isGood ? '⭐' : '🔴').repeat(deed.star_count)}` ) )
     if ( undone ) {
       const undoneBy = deed.undone_by === currentUser.email ? 'you' : deed.undone_by
       details.appendChild( mk( 'div', 'ra-undone-label', `Undone by ${undoneBy} · ${relativeTime( deed.undone_at )}` ) )
@@ -782,7 +799,7 @@ function unsubscribeFromDeeds () {
 /**
  * Logs a deed to the Supabase database
  */
-async function logDeed ( portion, type, category = null ) {
+async function logDeed ( kidId, type, category = null ) {
   if ( !currentUser || !isApproved ) {
     showToast( "You must be logged in and approved to log deeds.", "error" )
     return
@@ -800,8 +817,7 @@ async function logDeed ( portion, type, category = null ) {
   }
   deedTimestamps.push( now )
 
-  const typeLabel = type === 'good' ? 'Good Deed' : 'Bad Deed'
-  const portionDiv = document.getElementById( `portion-${portion}` )
+  const portionDiv = document.getElementById( `portion-${ ( KIDS_ID_MAP_REVERSE[ kidId ] || '' ).toLowerCase() }` )
   const btn = portionDiv.querySelector( `.star-${type}` )
   const icon = btn.querySelector( '.star-icon' )
 
@@ -822,37 +838,22 @@ async function logDeed ( portion, type, category = null ) {
 
     const insertPayload = {
       user_email: currentUser.email,
-      portion: portion.toUpperCase(),
-      deed_type: typeLabel,
-      category: categoryLabel,
+      kid_id: kidId,
+      deed_type: type,
+      category_id: category ? category.id : null,
       star_count: stars
     }
 
-    let data = null
-    let error = null
-
-    ;( { data, error } = await supabase
+    const { data, error } = await supabase
       .from( 'deeds' )
       .insert( [ insertPayload ] )
-      .select() )
-
-    // Backward compatibility: if new columns don't exist yet, fall back gracefully.
-    if ( error && String( error.message || '' ).toLowerCase().includes( 'column' ) ) {
-      ;( { data, error } = await supabase
-        .from( 'deeds' )
-        .insert( [ {
-          user_email: currentUser.email,
-          portion: portion.toUpperCase(),
-          deed_type: typeLabel
-        } ] )
-        .select() )
-    }
+      .select()
 
     if ( error ) throw error
 
     const insertedId = data && data.length > 0 ? data[0].id : null
 
-    showToast( `Logged ${typeLabel}: ${categoryLabel} (+${stars}⭐)`, type, insertedId )
+    showToast( `Logged ${type === 'good' ? 'Good Deed' : 'Bad Deed'}: ${categoryLabel} (+${stars}⭐)`, type, insertedId )
     updateCounts()
 
   } catch ( error ) {
@@ -886,8 +887,8 @@ async function deleteDeed ( id, buttonElement, deedDetails = null ) {
       setTimeout( () => parentToast.remove(), 400 )
     }
 
-    const categoryText = deedDetails && deedDetails.category
-      ? ` (${deedDetails.category}, ${deedDetails.star_count || 1}⭐)`
+    const categoryText = deedDetails && deedDetails.category_id
+      ? ` (${CATEGORIES_MAP[deedDetails.category_id]?.label ?? 'Unknown'}, ${deedDetails.star_count || 1}⭐)`
       : ''
     showToast( `Deed removed${categoryText}.`, "info" )
     updateCounts()
@@ -917,8 +918,8 @@ async function redoDeed ( id, buttonElement, deedDetails = null ) {
 
     if ( error ) throw error
 
-    const categoryText = deedDetails && deedDetails.category
-      ? ` (${deedDetails.category}, ${deedDetails.star_count || 1}⭐)`
+    const categoryText = deedDetails && deedDetails.category_id
+      ? ` (${CATEGORIES_MAP[deedDetails.category_id]?.label ?? 'Unknown'}, ${deedDetails.star_count || 1}⭐)`
       : ''
     showToast( `Deed restored${categoryText}.`, "good" )
     updateCounts()
@@ -949,8 +950,8 @@ async function undoDeed ( id, buttonElement, deedDetails = null ) {
 
     if ( error ) throw error
 
-    const categoryText = deedDetails && deedDetails.category
-      ? ` (${deedDetails.category}, ${deedDetails.star_count || 1}⭐)`
+    const categoryText = deedDetails && deedDetails.category_id
+      ? ` (${CATEGORIES_MAP[deedDetails.category_id]?.label ?? 'Unknown'}, ${deedDetails.star_count || 1}⭐)`
       : ''
     showToast( `Deed undone${categoryText}.`, "info" )
     updateCounts()
@@ -1023,7 +1024,7 @@ async function updateCounts () {
 
     const { data, error } = await supabase
       .from( 'deeds' )
-      .select( 'portion, deed_type, star_count' )
+      .select( 'kid_id, deed_type, star_count' )
       .gte( 'created_at', monthStart )
       .lt( 'created_at', monthEnd )
       .is( 'undone_at', null )
@@ -1031,11 +1032,11 @@ async function updateCounts () {
     if ( error ) throw error
 
     for ( const deed of ( data || [] ) ) {
-      const portion = ( deed.portion || '' ).toUpperCase()
+      const portion = KIDS_ID_MAP_REVERSE[ deed.kid_id ] || ''
       if ( !KIDS.includes( portion ) ) continue
 
       const id = portion.toLowerCase()
-      const suffix = deed.deed_type === 'Bad Deed' ? 'bad' : 'good'
+      const suffix = deed.deed_type === 'bad' ? 'bad' : 'good'
       const stars = Number.isFinite( Number( deed.star_count ) ) ? Number( deed.star_count ) : 1
       counts[`count-${id}-${suffix}`] += stars
     }
@@ -1097,7 +1098,7 @@ function updateProgressBars ( counts ) {
     valueEl.textContent = fmt( net )
 
     if ( maxNet <= 0 ) {
-      valueEl.className   = 'net-score-value'
+      valueEl.className   = net < 0 ? 'net-score-value trailing' : 'net-score-value'
       barEl.style.width   = '0%'
       barEl.className     = 'progress-fill'
       statusEl.textContent = ''
@@ -1131,7 +1132,7 @@ function updateProgressBars ( counts ) {
 
     const pct = Math.max( 0, ( net / maxNet ) * 100 )
     const gap = maxNet - net
-    valueEl.className   = 'net-score-value'
+    valueEl.className   = net < 0 ? 'net-score-value trailing' : 'net-score-value'
     barEl.style.width   = pct + '%'
     barEl.className     = 'progress-fill'
     statusEl.textContent = `${gap} behind`

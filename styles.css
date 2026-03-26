@@ -22,14 +22,13 @@ html {
 
 body {
     margin: 0;
-    padding: 0;
     font-family: 'Inter', sans-serif;
     background-color: var(--bg-color);
     color: var(--text-active);
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    padding: 3.5rem 0 4rem;
+    padding: 4.5rem 0 3rem;
     min-height: 100vh;
     min-height: 100dvh;
     /* Add a subtle background gradient */
@@ -65,7 +64,7 @@ body {
 }
 
 .portion:hover {
-    transform: translateY(-8px);
+    transform: translateY(-1px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
     background: rgba(255, 255, 255, 0.08);
 }
@@ -122,9 +121,9 @@ body {
 }
 
 .star-bad:hover .star-icon {
-    color: var(--bad-color);
+    color: var(--good-color);
     transform: scale(1.2);
-    filter: drop-shadow(0 0 25px var(--bad-glow));
+    filter: drop-shadow(0 0 25px var(--good-glow));
 }
 
 /* Deed Count Styling */
@@ -143,8 +142,8 @@ body {
 }
 
 .star-bad:hover .deed-count {
-    color: var(--bad-color);
-    text-shadow: 0 0 15px var(--bad-glow);
+    color: var(--good-color);
+    text-shadow: 0 0 15px var(--good-glow);
     transform: scale(1.1);
 }
 
@@ -166,7 +165,7 @@ body {
 }
 
 .star-bad:hover .star-label {
-    color: var(--bad-color);
+    color: var(--good-color);
 }
 
 /* Container Approval State */
@@ -556,13 +555,16 @@ body {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
+.star-good .star-icon  { color: #22c55e; }
+.star-good .deed-count { color: #22c55e; }
+.star-bad  .star-icon  { color: #ff4d4d; }
+.star-bad  .deed-count { color: #ff4d4d; }
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
     body {
-        align-items: flex-start;
-        padding: 2rem 0 3rem;
-        overflow-y: auto;
+      align-items: flex-start;
+      overflow-y: auto;
     }
 
     .container {
@@ -573,31 +575,75 @@ body {
 
     #portions-container {
         grid-template-columns: 1fr;
-        gap: 1rem;
+        gap: 0.75rem;
     }
 
+    /* Compact horizontal card layout */
     .portion {
-        padding: 2.5rem 1.75rem;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto auto;
+        column-gap: 1rem;
+        padding: 0.875rem 1.25rem;
+        border-radius: 16px;
+        align-items: center;
     }
 
     .portion-title {
-        font-size: 2rem;
+        grid-column: 1;
+        grid-row: 1;
+        font-size: 1.4rem;
         letter-spacing: 2px;
-        margin-bottom: 2rem;
+        margin: 0;
+        text-align: left;
+        align-self: center;
     }
 
+    /* Stars stacked vertically, right-aligned */
     .stars-container {
-        gap: 2.5rem;
+        grid-column: 2;
+        grid-row: 1 / 3;
+        flex-direction: column;
+        gap: 0.35rem;
+        align-self: center;
+        align-items: flex-end;
+        justify-content: center;
+        padding-top: 0;
+    }
+
+    /* Each button: count + star icon in a row, large tap target */
+    .star-btn {
+        flex-direction: row;
+        gap: 0.4rem;
+        padding: 0.5rem 0.4rem;
+        align-items: center;
+    }
+
+    .deed-count {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-bottom: 0;
+        color: var(--text-active);
     }
 
     .star-icon {
-        width: 68px;
-        height: 68px;
+        width: 30px;
+        height: 30px;
+    }
+
+
+    /* Labels removed on mobile */
+    .star-label {
+        display: none;
     }
 
     .net-score-bar {
-        margin-top: 1.5rem;
-        padding-top: 1rem;
+        grid-column: 1;
+        grid-row: 2;
+        width: 100%;
+        margin-top: 0.25rem;
+        padding-top: 0.5rem;
+        border-top: none !important;
     }
 
     .login-card {
@@ -653,26 +699,21 @@ body {
 /* Small phones */
 @media (max-width: 480px) {
     .portion {
-        padding: 2rem 1.25rem;
-        border-radius: 24px;
+        padding: 0.75rem 1rem;
     }
 
     .portion-title {
-        font-size: 1.75rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .stars-container {
-        gap: 2rem;
+        font-size: 1.2rem;
+        letter-spacing: 1.5px;
     }
 
     .star-icon {
-        width: 60px;
-        height: 60px;
+        width: 20px;
+        height: 20px;
     }
 
     .deed-count {
-        font-size: 1.2rem;
+        font-size: 0.95rem;
     }
 }
 
@@ -685,9 +726,9 @@ body {
     }
 
     .star-bad:active .star-icon {
-        color: var(--bad-color);
+        color: var(--good-color);
         transform: scale(1.15);
-        filter: drop-shadow(0 0 20px var(--bad-glow));
+        filter: drop-shadow(0 0 20px var(--good-glow));
     }
 
     .star-good:active .deed-count,
@@ -697,7 +738,7 @@ body {
 
     .star-bad:active .deed-count,
     .star-bad:active .star-label {
-        color: var(--bad-color);
+        color: var(--good-color);
     }
 }
 
@@ -871,6 +912,11 @@ body {
     text-shadow: 0 0 10px var(--good-glow);
 }
 
+.net-score-value.trailing {
+    color: var(--bad-color);
+    text-shadow: 0 0 10px var(--bad-glow);
+}
+
 .progress-track {
     width: 100%;
     height: 8px;
@@ -882,7 +928,7 @@ body {
 .progress-fill {
     height: 100%;
     width: 0%;
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.45);
     border-radius: 9999px;
     transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
 }
