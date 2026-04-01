@@ -31,6 +31,11 @@ let CATEGORIES_MAP = {} // { 'uuid': { id, type, label, stars }, ... }
 
 let actionConfirmDialog = null
 let actionConfirmResolver = null
+let actionDialogLock = false // prevents overlapping confirmation flows (wrong-kid / wrong-category race)
+
+function setStarButtonsDialogBlocked ( blocked ) {
+  document.querySelectorAll( '.star-btn' ).forEach( b => { b.style.pointerEvents = blocked ? 'none' : '' } )
+}
 
 function getCategoriesForType ( type ) {
   return type === 'good' ? GOOD_DEED_CATEGORIES : BAD_DEED_CATEGORIES
@@ -38,6 +43,8 @@ function getCategoriesForType ( type ) {
 
 function closeActionConfirmDialog ( payload ) {
   if ( actionConfirmDialog ) actionConfirmDialog.backdrop.classList.remove( 'open' )
+  setStarButtonsDialogBlocked( false )
+  actionDialogLock = false
   if ( actionConfirmResolver ) actionConfirmResolver( payload )
   actionConfirmResolver = null
 }
@@ -108,6 +115,13 @@ function ensureActionConfirmDialog () {
 
 function askActionConfirmation ( options ) {
   const dialog = ensureActionConfirmDialog()
+
+  // Guard: ignore concurrent calls (prevents wrong-kid / wrong-category race)
+  if ( actionDialogLock || dialog.backdrop.classList.contains( 'open' ) ) {
+    return Promise.resolve( { confirmed: false } )
+  }
+  actionDialogLock = true
+
   const useCategory = options.withCategory === true
   const categories = useCategory ? getCategoriesForType( options.type ) : []
 
@@ -156,6 +170,7 @@ function askActionConfirmation ( options ) {
     dialog.categoryGrid.style.display = 'none'
   }
 
+  setStarButtonsDialogBlocked( true )
   dialog.backdrop.classList.add( 'open' )
 
   return new Promise( ( resolve ) => {
@@ -167,8 +182,10 @@ function askActionConfirmation ( options ) {
         return
       }
 
-      const selectedId = dialog.categoryGrid.querySelector( 'input[type="radio"]:checked' )?.value
-      const selectedCategory = categories.find( category => category.id === selectedId ) || categories[0]
+      const checked = dialog.categoryGrid.querySelector( 'input[type="radio"]:checked' )
+      const selectedId = checked ? checked.value : null
+      // Use String() coercion so integer IDs (e.g. 1) match their string form ("1") from input.value
+      const selectedCategory = categories.find( c => String( c.id ) === String( selectedId ) ) || categories[0]
       closeActionConfirmDialog( { confirmed: true, category: selectedCategory } )
     }
   } )
@@ -406,10 +423,7 @@ supabase.auth.onAuthStateChange( ( event, session ) => {
   if ( event === 'SIGNED_IN' || event === 'INITIAL_SESSION' ) {
     if ( session ) {
       currentUser = session.user
-      console.log('[onAuthStateChange] calling checkUserApproval', session.user.email);
       checkUserApproval( session.user.email )
-      
-      console.log('[onAuthStateChange] user session available', session.user.email);
     } else {
       showLoginScreen()
     }
