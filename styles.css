@@ -686,6 +686,23 @@ body {
 
     .pmb-scores {
         width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 0.75rem 1rem;
+    }
+
+    .pmb-score {
+        min-width: 0;
+    }
+
+    .pmb-vs {
+        display: none;
+    }
+
+    .pmb-result {
+        width: 100%;
+        white-space: normal;
+        text-align: left;
     }
 
     .pmb-label { font-size: 0.7rem; }
